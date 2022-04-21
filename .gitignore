@@ -12,7 +12,6 @@
 /.idea/copyright/profiles_settings.xml
 /.idea/encodings.xml
 /.idea/misc.xml
-/.idea/modules.xml
 /.idea/scopes/scope_settings.xml
 /.idea/vcs.xml
 /.idea/runConfigurations.xml
@@ -20,7 +19,6 @@
 /.idea/caches/build_file_checksums.ser
 /.idea/markdown-navigator.xml
 /.idea/markdown-navigator/profiles_settings.xml
-*.iml
 .DS_Store
 /build
 /captures
