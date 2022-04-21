@@ -32,6 +32,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
     private int mOrientation;
 
     private int mMaxItemsInLine;
+    private int mMaxLines = Integer.MAX_VALUE;
 
     private int mSpacingBetweenItems;
     private int mSpacingBetweenLines;
@@ -109,8 +110,8 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         mCurrentLines.clear();
 
         for (int i = mFirstItemAdapterIndex; i < getItemCount(); i += currentLine.mItemsCount) {
+            if (mMaxLines == mCurrentLines.size()) break;
             currentLine = addLineToEnd(i, topOrLeft, recycler);
-
             mCurrentLines.add(currentLine);
 
             topOrLeft = mSpacingBetweenLines + currentLine.mEndValueOfTheHighestItem;
@@ -175,15 +176,20 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
     }
 
     public void setMaxItemsInLine(int maxItemsInLine) {
-
         if (maxItemsInLine <= 0) {
             throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         }
-
         assertNotInLayoutOrScroll(null);
-
         mMaxItemsInLine = maxItemsInLine;
+        requestLayout();
+    }
 
+    public void setMaxLines(int maxLines) {
+        if (maxLines <= 0) {
+            throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
+        }
+        assertNotInLayoutOrScroll(null);
+        mMaxLines = maxLines;
         requestLayout();
     }
 
@@ -479,14 +485,15 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
     private int addLinesToEndAndDeleteFromStart(int offset, RecyclerView.Recycler recycler) {
         Line line = mCurrentLines.get(mCurrentLines.size() - 1);
 
-        int availableOffset = line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd() + mLayoutManagerHelper.getEndPadding();
+        int availableOffset = Math.max(0,
+            line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd() + mLayoutManagerHelper.getEndPadding());
 
         int currentOffset = Math.min(availableOffset, offset);
         int adapterViewIndex = getPosition(getChildAt(getChildCount() - 1)) + 1;
 
         int startValueOfNewLine = line.mEndValueOfTheHighestItem + mSpacingBetweenLines;
 
-        while (adapterViewIndex < getItemCount()) {
+        while (adapterViewIndex < getItemCount() && mCurrentLines.size() < mMaxLines) {
 
             if (currentOffset >= offset) {
                 deleteLinesFromStart(offset, recycler);
@@ -535,35 +542,29 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
 
     @Override
     public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
-        int offset = computeOffset(dy, recycler);
-        if (offset == Integer.MIN_VALUE) return 0;
-        if (offset != 0) offsetChildrenVertical(-offset);
-        updateScrollPosition();
-        return offset;
+        return mOrientation == VERTICAL ? scrollBy(dy, recycler) : 0;
     }
 
     @Override
     public int scrollHorizontallyBy(int dx, RecyclerView.Recycler recycler, RecyclerView.State state) {
-        int offset = computeOffset(dx, recycler);
-        if (offset == Integer.MIN_VALUE) return 0;
-        if (offset != 0) offsetChildrenHorizontal(-offset);
-        updateScrollPosition();
-        return offset;
+        return mOrientation == HORIZONTAL ? scrollBy(dx, recycler) : 0;
     }
 
-    private int computeOffset(int d, RecyclerView.Recycler recycler) {
-        if (getChildCount() <= 0 || d == 0)
-            return Integer.MIN_VALUE;
+    private int scrollBy(int delta, RecyclerView.Recycler recycler) {
+        if (getChildCount() <= 0 || delta == 0) {
+            return 0;
+        }
 
-        int offset = d > 0
-            ? addLinesToEndAndDeleteFromStart(d, recycler)
-            : addLinesToStartAndDeleteFromEnd(d, recycler);
-
+        int offset = delta > 0
+            ? addLinesToEndAndDeleteFromStart(delta, recycler)
+            : addLinesToStartAndDeleteFromEnd(delta, recycler);
         if (offset != 0) {
             for (int i = 0; i < mCurrentLines.size(); i++) {
                 mCurrentLines.get(i).offset(-offset);
             }
+            mLayoutManagerHelper.offsetChildren(-offset);
         }
+        updateScrollPosition();
         return offset;
     }
 
@@ -672,6 +673,8 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
 
         public abstract int getPositionOfCurrentItem(int itemMaxSize, int itemSize);
 
+        public abstract void offsetChildren(int amount);
+
         public static FLMLayoutManagerHelper createLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int orientation, int gravity) {
             switch (orientation) {
                 case VERTICAL:
@@ -771,6 +774,10 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
                     return currentPosition;
                 }
 
+                @Override
+                public void offsetChildren(int amount) {
+                    mLayoutManager.offsetChildrenVertical(amount);
+                }
             };
         }
 
@@ -857,6 +864,11 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
                             break;
                     }
                     return currentPosition;
+                }
+
+                @Override
+                public void offsetChildren(int amount) {
+                    mLayoutManager.offsetChildrenHorizontal(amount);
                 }
             };
         }
