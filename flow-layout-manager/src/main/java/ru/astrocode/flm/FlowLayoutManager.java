@@ -19,7 +19,7 @@ import java.util.List;
 /**
  * Created by Astrocode on 26.05.18.
  */
-public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider {
+public class FlowLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider {
 
     public static final Object ELLIPSIS_COUNT_CHANGED_PAYLOAD = new Object();
     private static final List<Object> ELLIPSIS_COUNT_CHANGED_PAYLOAD_LIST = Collections.singletonList(ELLIPSIS_COUNT_CHANGED_PAYLOAD);
@@ -50,19 +50,19 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
     private int mFirstItemAdapterIndex;
     private int mFirstLineStartPosition;
 
-    public FLMFlowLayoutManager(int orientation) {
+    public FlowLayoutManager(int orientation) {
         this(orientation, Gravity.START, Integer.MAX_VALUE, 0, 0);
     }
 
-    public FLMFlowLayoutManager(int orientation, int gravity) {
+    public FlowLayoutManager(int orientation, int gravity) {
         this(orientation, gravity, Integer.MAX_VALUE, 0, 0);
     }
 
-    public FLMFlowLayoutManager(int orientation, int gravity, int spacingBetweenItems, int spacingBetweenLines) {
+    public FlowLayoutManager(int orientation, int gravity, int spacingBetweenItems, int spacingBetweenLines) {
         this(orientation, gravity, Integer.MAX_VALUE, spacingBetweenItems, spacingBetweenLines);
     }
 
-    public FLMFlowLayoutManager(int orientation, int gravity, int maxItemsInLine, int spacingBetweenItems, int spacingBetweenLines) {
+    public FlowLayoutManager(int orientation, int gravity, int maxItemsInLine, int spacingBetweenItems, int spacingBetweenLines) {
         mCurrentLines = new ArrayList<>();
 
         mGravity = gravity;
