@@ -7,41 +7,64 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.*;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.recyclerview.widget.RecyclerView;
-import ru.astrocode.flm.FLMFlowLayoutManager;
+import ru.astrocode.flm.FlowLayoutManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
-public class ActivityMain extends AppCompatActivity {
+public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBarChangeListener {
+
+    SeekBar mMaxLineBar;
+    FlowLayoutManager lm = new FlowLayoutManager(FlowLayoutManager.VERTICAL, Gravity.CENTER);
+    RecyclerView.Adapter<?> adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final RecyclerView recyclerView = new RecyclerView(this);
+        final LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        adapter = new Adapter(this, lm);
+
         int spacing = getResources().getDimensionPixelSize(R.dimen.spacing);
+        mMaxLineBar = new SeekBar(this);
+        mMaxLineBar.setPadding(mMaxLineBar.getPaddingLeft(), spacing, mMaxLineBar.getPaddingRight(), spacing);
+        mMaxLineBar.setMax(24);
+        mMaxLineBar.setOnSeekBarChangeListener(this);
+        mMaxLineBar.setProgress(mMaxLineBar.getMax());
+        root.addView(mMaxLineBar);
+
+        final RecyclerView recyclerView = new RecyclerView(this);
+        root.addView(recyclerView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         recyclerView.setPadding(spacing, spacing, spacing, spacing);
         recyclerView.setClipToPadding(false);
-        recyclerView.setLayoutManager(
-            new FLMFlowLayoutManager(FLMFlowLayoutManager.VERTICAL, Gravity.CENTER, spacing, spacing)
-        );
-        recyclerView.setAdapter(new Adapter(this));
-        setContentView(recyclerView);
+        lm.setSpacingBetweenItems(spacing);
+        lm.setSpacingBetweenLines(spacing);
+        recyclerView.setLayoutManager(lm);
+        recyclerView.setAdapter(new Adapter(this, lm));
+        setContentView(root);
     }
 
-    private static final class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
+    @Override
+    public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+        lm.setMaxLines(i == seekBar.getMax() ? Integer.MAX_VALUE : (i + 1), true, true);
+    }
+    @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+    @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+    private final class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
         private final int mBtnCloseSize, mBtnCloseLeftMargin;
 
         final ArrayList<String> mData;
+        private final FlowLayoutManager mLayoutManager;
 
-        public Adapter(Context context) {
+        public Adapter(Context context, FlowLayoutManager layoutManager) {
             mData = new ArrayList<>(Arrays.asList(context.getResources().getStringArray(R.array.Countries)));
+            this.mLayoutManager = layoutManager;
             float dp = context.getResources().getDisplayMetrics().density;
             mBtnCloseSize = Math.round(16 * dp);
             mBtnCloseLeftMargin = Math.round(5 * dp);
@@ -84,12 +107,14 @@ public class ActivityMain extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(@NonNull Adapter.ViewHolder holder, int position) {
-            holder.mText.setText(mData.get(position));
+            holder.mText.setText(position == mData.size()
+                ? (mLayoutManager.getEllipsisCount() + " more...")
+                : mData.get(position));
         }
 
         @Override
         public int getItemCount() {
-            return mData.size();
+            return mData.size() + 1;
         }
 
         final class ViewHolder extends RecyclerView.ViewHolder {
@@ -100,7 +125,9 @@ public class ActivityMain extends AppCompatActivity {
                 mText = itemView.findViewById(R.id.textView);
                 itemView.findViewById(R.id.imageButton).setOnClickListener(view -> {
                     int position = getBindingAdapterPosition();
-                    if (position >= 0) {
+                    if (position == mData.size()) {
+                        mMaxLineBar.setProgress(mMaxLineBar.getMax());
+                    } else if (position >= 0) {
                         mData.remove(position);
                         notifyItemRemoved(position);
                     }

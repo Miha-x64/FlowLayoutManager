@@ -1,8 +1,26 @@
-# FlowLayoutManager
+## This fork
 
-Flow layout manager for RecyclerView.Supports **API 10(Android 2.3)** and above.
+* AndroidX
+* Support for maxLines and ellipsize
 
-![Example vertical](flow_layout_manager_vertical.gif)
+![Example vertical](flow_layout_manager_vertical_ellipsized.gif)
+
+```groovy
+// root
+allprojects {
+   repositories {
+      ...
+      maven { url 'https://jitpack.io' }
+   }
+}
+
+// app
+dependencies {
+   implementation 'com.github.Miha-x64:FlowLayoutManager:-SNAPSHOT'
+}
+```
+
+___
 
 ## Features
 
