@@ -13,14 +13,18 @@ import androidx.recyclerview.widget.OrientationHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Created by Astrocode on 26.05.18.
  */
 public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider {
 
+    public static final Object ELLIPSIS_COUNT_CHANGED_PAYLOAD = new Object();
+    private static final List<Object> ELLIPSIS_COUNT_CHANGED_PAYLOAD_LIST = Collections.singletonList(ELLIPSIS_COUNT_CHANGED_PAYLOAD);
+
     public final static int VERTICAL = OrientationHelper.VERTICAL, HORIZONTAL = OrientationHelper.HORIZONTAL;
-    public final static int DEFAULT_COUNT_ITEM_IN_LINE = -1;
 
     private final static String TAG_FIRST_ITEM_ADAPTER_INDEX = "TAG_FIRST_ITEM_ADAPTER_INDEX";
     private final static String TAG_FIRST_LINE_START_POSITION = "TAG_FIRST_LINE_START_POSITION";
@@ -33,6 +37,8 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
 
     private int mMaxItemsInLine;
     private int mMaxLines = Integer.MAX_VALUE;
+    private boolean mEllipsize = false;
+    private int mEllipsisCount = -1;
 
     private int mSpacingBetweenItems;
     private int mSpacingBetweenLines;
@@ -45,15 +51,15 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
     private int mFirstLineStartPosition;
 
     public FLMFlowLayoutManager(int orientation) {
-        this(orientation, Gravity.START, DEFAULT_COUNT_ITEM_IN_LINE, 0, 0);
+        this(orientation, Gravity.START, Integer.MAX_VALUE, 0, 0);
     }
 
     public FLMFlowLayoutManager(int orientation, int gravity) {
-        this(orientation, gravity, DEFAULT_COUNT_ITEM_IN_LINE, 0, 0);
+        this(orientation, gravity, Integer.MAX_VALUE, 0, 0);
     }
 
     public FLMFlowLayoutManager(int orientation, int gravity, int spacingBetweenItems, int spacingBetweenLines) {
-        this(orientation, gravity, DEFAULT_COUNT_ITEM_IN_LINE, spacingBetweenItems, spacingBetweenLines);
+        this(orientation, gravity, Integer.MAX_VALUE, spacingBetweenItems, spacingBetweenLines);
     }
 
     public FLMFlowLayoutManager(int orientation, int gravity, int maxItemsInLine, int spacingBetweenItems, int spacingBetweenLines) {
@@ -64,10 +70,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         mFirstItemAdapterIndex = 0;
         mFirstLineStartPosition = -1;
 
-        if (maxItemsInLine == 0 || maxItemsInLine < -1) {
-            throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
-        }
-
+        if (maxItemsInLine <= 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         mMaxItemsInLine = maxItemsInLine;
 
         if (mSpacingBetweenItems < 0) {
@@ -109,9 +112,11 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         detachAndScrapAttachedViews(recycler);
         mCurrentLines.clear();
 
-        for (int i = mFirstItemAdapterIndex; i < getItemCount(); i += currentLine.mItemsCount) {
-            if (mMaxLines == mCurrentLines.size()) break;
-            currentLine = addLineToEnd(i, topOrLeft, recycler);
+        for (int i = mFirstItemAdapterIndex;
+             i < contentItemCount() && mCurrentLines.size() < mMaxLines;
+             i += currentLine.mItemsCount) {
+
+            currentLine = addLineToEnd(i, topOrLeft, recycler, mCurrentLines.size() + 1 == mMaxLines);
             mCurrentLines.add(currentLine);
 
             topOrLeft = mSpacingBetweenLines + currentLine.mEndValueOfTheHighestItem;
@@ -184,13 +189,38 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         requestLayout();
     }
 
-    public void setMaxLines(int maxLines) {
-        if (maxLines <= 0) {
-            throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
-        }
+    /**
+     * Update maxLine constraint.
+     * @param maxLines  max line count
+     * @param ellipsize show “ellipsis” view (using last adapter element)
+     * @param notify    notify “ellipsis” view changed (leads to animated change) (applicable only if {@param ellipsize})
+     */
+    public void setMaxLines(int maxLines, boolean ellipsize, boolean notify) {
+        if (maxLines <= 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         assertNotInLayoutOrScroll(null);
-        mMaxLines = maxLines;
-        requestLayout();
+        if (mMaxLines != maxLines || mEllipsize != ellipsize) {
+            mMaxLines = maxLines;
+            //noinspection AssignmentUsedAsCondition
+            if (mEllipsize = ellipsize) {
+                mEllipsisCount = -1;
+                if (notify) {
+                    RecyclerView rv;
+                    RecyclerView.Adapter<?> a;
+                    if ((rv = findRV()) != null && (a = rv.getAdapter()) != null)
+                        a.notifyItemChanged(getItemCount() - 1, ELLIPSIS_COUNT_CHANGED_PAYLOAD);
+                }
+            }
+            requestLayout();
+        }
+    }
+
+    private RecyclerView findRV() {
+        View ch;
+        return (ch = getChildAt(0)) != null ? (RecyclerView) ch.getParent() : null;
+    }
+
+    public int getEllipsisCount() {
+        return mEllipsize ? mEllipsisCount : -1;
     }
 
     public void setSpacingBetweenItems(int spacingBetweenItems) {
@@ -257,7 +287,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
      * @return New line.
      */
     @NonNull
-    private Line addLineToEnd(int startAdapterIndex, int start, RecyclerView.Recycler recycler) {
+    private Line addLineToEnd(int startAdapterIndex, int start, RecyclerView.Recycler recycler, boolean lastLine) {
         boolean isEndOfLine = false;
 
         int currentAdapterIndex = startAdapterIndex;
@@ -267,17 +297,14 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         Line line = new Line();
         line.mStartValueOfTheHighestItem = start;
 
-        while (!isEndOfLine && currentAdapterIndex < getItemCount()) {
-            final View view = recycler.getViewForPosition(currentAdapterIndex);
-
-            addView(view);
-
+        while (!isEndOfLine && currentAdapterIndex < contentItemCount()) {
+            final View view = attach(recycler, currentAdapterIndex, -1);
             measureChildWithMargins(view, 0, 0);
-
             final int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
             final int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
 
-            if (line.mItemsCount == mMaxItemsInLine || (currentItemsSize + widthOrHeight) >= mLayoutManagerHelper.getLineSize()) {
+            if (line.mItemsCount == mMaxItemsInLine ||
+                (currentItemsSize + widthOrHeight) >= mLayoutManagerHelper.getLineSize()) {
                 isEndOfLine = true;
 
                 if (currentItemsSize == 0) {
@@ -302,24 +329,63 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
             currentAdapterIndex++;
         }
 
-        layoutItemsToEnd(currentItemsSize - mSpacingBetweenItems, currentMaxValue, line.mItemsCount, line.mStartValueOfTheHighestItem);
+        if (lastLine && (mEllipsisCount = mEllipsize ? (contentItemCount() - currentAdapterIndex) : 0) > 0) {
+            RecyclerView rv = findRV();
+            View view = attach(recycler, contentItemCount(), -1);
+            bindAndMeasureEllipsis(view, rv);
+            int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
+            int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
+            if (heightOrWidth > currentMaxValue) {
+                currentMaxValue = heightOrWidth;
+                line.mEndValueOfTheHighestItem = line.mStartValueOfTheHighestItem + currentMaxValue;
+            }
+            line.mItemsCount++;
+
+//            boolean removed = false;
+            while (line.mItemsCount > mMaxItemsInLine ||
+                (currentItemsSize + widthOrHeight > mLayoutManagerHelper.getLineSize()) && line.mItemsCount > 0) {
+                View victim = getChildAt(getChildCount() - 2); // pre-last child
+                currentItemsSize -= mLayoutManagerHelper.getDecoratedMeasurementInOther(victim) + mSpacingBetweenItems;
+                line.mItemsCount--;
+                detachAndScrapView(victim, recycler);
+
+                bindAndMeasureEllipsis(view, rv);
+                widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
+//                removed = true;
+            }
+//            if (removed) // TODO re-calculate currentMaxValue
+            currentItemsSize += widthOrHeight + mSpacingBetweenItems;
+        }
+
+        layoutItemsToEnd(currentItemsSize - mSpacingBetweenItems, currentMaxValue, line);
 
         return line;
+    }
+
+    private void bindAndMeasureEllipsis(View view, RecyclerView rv) {
+        rv.getAdapter().onBindViewHolder( // go crazy
+            rv.findContainingViewHolder(view), contentItemCount(), ELLIPSIS_COUNT_CHANGED_PAYLOAD_LIST
+        );
+        measureChildWithMargins(view, 0, 0);
     }
 
     /**
      * Arrange of views from start to end.
      *
-     * @param itemsSize                  Size(width - if orientation is VERTICAL or height - if orientation is HORIZONTAL) of all items(include spacing) in line.
-     * @param maxItemHeightOrWidth       Max item height(if VERTICAL) or width(if HORIZONTAL) in line.
-     * @param itemsInLine                Item count in line.
-     * @param startValueOfTheHighestItem Start position(Top - if orientation is VERTICAL or Left - if orientation is HORIZONTAL) of the line.
+     * @param itemsSize             Size(width - if orientation is VERTICAL or height - if orientation is HORIZONTAL) of all items(include spacing) in line.
+     * @param maxItemHeightOrWidth  Max item height(if VERTICAL) or width(if HORIZONTAL) in line.
+     * @param line                  Well, the line to lay out
      */
-    private void layoutItemsToEnd(int itemsSize, int maxItemHeightOrWidth, int itemsInLine, int startValueOfTheHighestItem) {
+    private void layoutItemsToEnd(int itemsSize, int maxItemHeightOrWidth, Line line) {
         int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
         int childCount = getChildCount();
-        for (int i = itemsInLine; i > 0; i--) {
-            currentStart = layoutItem(maxItemHeightOrWidth, startValueOfTheHighestItem, currentStart, getChildAt(childCount - i));
+        for (int i = line.mItemsCount; i > 0; i--) {
+            currentStart = layoutItem(
+                maxItemHeightOrWidth,
+                line.mStartValueOfTheHighestItem,
+                currentStart,
+                getChildAt(childCount - i)
+            );
         }
     }
 
@@ -360,12 +426,8 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         line.mEndValueOfTheHighestItem = end;
 
         while (!isEndOfLine && currentAdapterIndex >= 0) {
-            final View view = recycler.getViewForPosition(currentAdapterIndex);
-
-            addView(view, 0);
-
+            final View view = attach(recycler, currentAdapterIndex, 0);
             measureChildWithMargins(view, 0, 0);
-
             final int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
             final int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
 
@@ -397,6 +459,12 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         layoutItemsToStart(currentItemsSize - mSpacingBetweenItems, currentMaxValue, line.mItemsCount, line.mStartValueOfTheHighestItem);
 
         return line;
+    }
+
+    private View attach(RecyclerView.Recycler recycler, int adapterPosition, int layoutPosition) {
+        final View view = recycler.getViewForPosition(adapterPosition);
+        addView(view, layoutPosition);
+        return view;
     }
 
     /**
@@ -493,7 +561,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
 
         int startValueOfNewLine = line.mEndValueOfTheHighestItem + mSpacingBetweenLines;
 
-        while (adapterViewIndex < getItemCount() && mCurrentLines.size() < mMaxLines) {
+        while (adapterViewIndex < contentItemCount() && mCurrentLines.size() < mMaxLines) {
 
             if (currentOffset >= offset) {
                 deleteLinesFromStart(offset, recycler);
@@ -502,7 +570,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
                 deleteLinesFromStart(currentOffset, recycler);
             }
 
-            line = addLineToEnd(adapterViewIndex, startValueOfNewLine, recycler);
+            line = addLineToEnd(adapterViewIndex, startValueOfNewLine, recycler, mCurrentLines.size() + 1 == mMaxLines);
             mCurrentLines.add(line);
 
             startValueOfNewLine = line.mEndValueOfTheHighestItem + mSpacingBetweenLines;
@@ -587,7 +655,7 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
 
     @Override
     public void scrollToPosition(int position) {
-        if (position >= 0 && position <= getItemCount() - 1) {
+        if (position >= 0 && position <= contentItemCount() - 1) {
             mFirstItemAdapterIndex = position;
             mFirstLineStartPosition = -1;
             requestLayout();
@@ -616,6 +684,10 @@ public class FLMFlowLayoutManager extends RecyclerView.LayoutManager implements 
         } else {
             return new PointF(0, direction);
         }
+    }
+
+    private int contentItemCount() {
+        return getItemCount() - (mEllipsize ? 1 : 0);
     }
 
     /**
