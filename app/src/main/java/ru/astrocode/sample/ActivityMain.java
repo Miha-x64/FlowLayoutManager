@@ -42,16 +42,14 @@ public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBar
         root.addView(recyclerView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         recyclerView.setPadding(spacing, spacing, spacing, spacing);
         recyclerView.setClipToPadding(false);
-        lm.setSpacingBetweenItems(spacing);
-        lm.setSpacingBetweenLines(spacing);
-        recyclerView.setLayoutManager(lm);
+        recyclerView.setLayoutManager(lm.spacingBetweenItems(spacing).spacingBetweenLines(spacing));
         recyclerView.setAdapter(new Adapter(this, lm));
         setContentView(root);
     }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-        lm.setMaxLines(i == seekBar.getMax() ? Integer.MAX_VALUE : (i + 1), true, true);
+        lm.maxLines(i == seekBar.getMax() ? Integer.MAX_VALUE : (i + 1), true, true);
     }
     @Override public void onStartTrackingTouch(SeekBar seekBar) {}
     @Override public void onStopTrackingTouch(SeekBar seekBar) {}
@@ -108,7 +106,7 @@ public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBar
         @Override
         public void onBindViewHolder(@NonNull Adapter.ViewHolder holder, int position) {
             holder.mText.setText(position == mData.size()
-                ? (mLayoutManager.getEllipsisCount() + " more...")
+                ? (mLayoutManager.ellipsisCount() + " more...")
                 : mData.get(position));
         }
 

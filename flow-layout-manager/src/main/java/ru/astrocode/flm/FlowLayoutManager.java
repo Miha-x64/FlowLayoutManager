@@ -68,7 +68,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         this(
             ta.getInt(0, VERTICAL), ta.getInt(1, Gravity.START),
             ta.getInt(2, Integer.MAX_VALUE), ta.getDimensionPixelOffset(3, 0), ta.getDimensionPixelOffset(4, 0));
-        setMaxLines(ta.getInt(5, Integer.MAX_VALUE), ta.getInt(6, 0) == 3 /*ellipsize="end"*/, false);
+        maxLines(ta.getInt(5, Integer.MAX_VALUE), ta.getInt(6, 0) == 3 /*ellipsize="end"*/, false);
         ta.recycle();
     }
 
@@ -80,11 +80,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         this(orientation, gravity, Integer.MAX_VALUE, 0, 0);
     }
 
-    public FlowLayoutManager(int orientation, int gravity, @Px int spacingBetweenItems, @Px int spacingBetweenLines) {
-        this(orientation, gravity, Integer.MAX_VALUE, spacingBetweenItems, spacingBetweenLines);
-    }
-
-    public FlowLayoutManager(int orientation, int gravity, int maxItemsInLine, @Px int spacingBetweenItems, @Px int spacingBetweenLines) {
+    private FlowLayoutManager(
+        int orientation, int gravity,
+        int maxItemsInLine, @Px int spacingBetweenItems, @Px int spacingBetweenLines) {
         mCurrentLines = new ArrayList<>();
 
         mGravity = gravity;
@@ -164,18 +162,15 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     @Override
     public void onRestoreInstanceState(Parcelable state) {
         Bundle data = (Bundle) state;
-
         mFirstItemAdapterIndex = data.getInt(TAG_FIRST_ITEM_ADAPTER_INDEX);
         mFirstLineStartPosition = data.getInt(TAG_FIRST_LINE_START_POSITION);
     }
 
     @Override
     public Parcelable onSaveInstanceState() {
-        Bundle data = new Bundle();
-
+        Bundle data = new Bundle(2);
         data.putInt(TAG_FIRST_ITEM_ADAPTER_INDEX, mFirstItemAdapterIndex);
         data.putInt(TAG_FIRST_LINE_START_POSITION, mFirstLineStartPosition);
-
         return data;
     }
 
@@ -185,8 +180,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
      * @param orientation New orientation.
      */
 
-    public void setOrientation(int orientation) {
-
+    public FlowLayoutManager orientation(int orientation) {
         if (orientation != HORIZONTAL && orientation != VERTICAL) {
             throw new IllegalArgumentException(ERROR_UNKNOWN_ORIENTATION);
         }
@@ -199,15 +193,27 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
             requestLayout();
         }
+
+        return this;
+    }
+    /**
+     * Return current orientation of the layout manager.
+     */
+    public int orientation() {
+        return mOrientation;
     }
 
-    public void setMaxItemsInLine(int maxItemsInLine) {
+    public FlowLayoutManager maxItemsInLine(int maxItemsInLine) {
         if (maxItemsInLine <= 0) {
             throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         }
         assertNotInLayoutOrScroll(null);
         mMaxItemsInLine = maxItemsInLine;
         requestLayout();
+        return this;
+    }
+    public int maxItemsInLine() {
+        return mMaxItemsInLine;
     }
 
     /**
@@ -216,7 +222,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
      * @param ellipsize show “ellipsis” view (using last adapter element)
      * @param notify    notify “ellipsis” view changed (leads to animated change) (applicable only if {@param ellipsize})
      */
-    public void setMaxLines(int maxLines, boolean ellipsize, boolean notify) {
+    public FlowLayoutManager maxLines(int maxLines, boolean ellipsize, boolean notify) {
         if (maxLines <= 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         assertNotInLayoutOrScroll(null);
         if (mMaxLines != maxLines || mEllipsize != ellipsize) {
@@ -233,48 +239,49 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             }
             requestLayout();
         }
+        return this;
+    }
+    public int maxLines() {
+        return mMaxLines;
+    }
+    public boolean ellipsize() {
+        return mEllipsize;
     }
 
-    private RecyclerView findRV() {
-        View ch;
-        return (ch = getChildAt(0)) != null ? (RecyclerView) ch.getParent() : null;
-    }
-
-    public int getEllipsisCount() {
+    /**
+     * Returns number of hidden views, or -1, if ellipsize is disabled
+     * @return number of hidden rows
+     */
+    public int ellipsisCount() {
         return mEllipsize ? mEllipsisCount : -1;
     }
 
-    public void setSpacingBetweenItems(int spacingBetweenItems) {
-
+    public FlowLayoutManager spacingBetweenItems(int spacingBetweenItems) {
         if (spacingBetweenItems < 0) {
             throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         }
 
         assertNotInLayoutOrScroll(null);
-
         mSpacingBetweenItems = spacingBetweenItems;
-
         requestLayout();
+        return this;
+    }
+    public int spacingBetweenItems() {
+        return mSpacingBetweenItems;
     }
 
-    public void setSpacingBetweenLines(int spacingBetweenLines) {
-
+    public FlowLayoutManager spacingBetweenLines(int spacingBetweenLines) {
         if (spacingBetweenLines < 0) {
             throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         }
 
         assertNotInLayoutOrScroll(null);
-
         mSpacingBetweenLines = spacingBetweenLines;
-
         requestLayout();
+        return this;
     }
-
-    /**
-     * Return current orientation of the layout manager.
-     */
-    public int getOrientation() {
-        return mOrientation;
+    public int spacingBetweenLines() {
+        return mSpacingBetweenLines;
     }
 
     /**
@@ -282,7 +289,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
      *
      * @param gravity New gravity.
      */
-    public void setGravity(int gravity) {
+    public FlowLayoutManager gravity(int gravity) {
         assertNotInLayoutOrScroll(null);
 
         if (gravity != mGravity) {
@@ -291,12 +298,13 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
             requestLayout();
         }
+        return this;
     }
 
     /**
      * Return current gravity of the layout manager.
      */
-    public int getGravity() {
+    public int gravity() {
         return mGravity;
     }
 
@@ -382,7 +390,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         return line;
     }
-
+    private RecyclerView findRV() {
+        View ch;
+        return (ch = getChildAt(0)) != null ? (RecyclerView) ch.getParent() : null;
+    }
     private void bindAndMeasureEllipsis(View view, RecyclerView rv) {
         rv.getAdapter().onBindViewHolder( // go crazy
             rv.findContainingViewHolder(view), contentItemCount(), ELLIPSIS_COUNT_CHANGED_PAYLOAD_LIST
@@ -666,7 +677,6 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
         LinearSmoothScroller linearSmoothScroller = new LinearSmoothScroller(recyclerView.getContext());
         linearSmoothScroller.setTargetPosition(position);
-
         startSmoothScroll(linearSmoothScroller);
     }
 
