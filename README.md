@@ -2,6 +2,7 @@
 
 * AndroidX
 * Support for maxLines and ellipsize
+* autoMeasure (wrap_content) support
 
 ![Example vertical](flow_layout_manager_vertical_ellipsized.gif)
 
@@ -16,7 +17,7 @@ allprojects {
 
 // app
 dependencies {
-   implementation 'com.github.Miha-x64:FlowLayoutManager:93642a5e'
+   implementation 'com.github.Miha-x64:FlowLayoutManager:ae861929'
 }
 ```
 
