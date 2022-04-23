@@ -234,15 +234,12 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         assertNotInLayoutOrScroll(null);
         if (mMaxLines != maxLines || mEllipsize != ellipsize) {
             mMaxLines = maxLines;
-            //noinspection AssignmentUsedAsCondition
-            if (mEllipsize = ellipsize) {
-                mEllipsisCount = -1;
-                if (notify) {
-                    RecyclerView rv;
-                    RecyclerView.Adapter<?> a;
-                    if ((rv = findRV()) != null && (a = rv.getAdapter()) != null)
-                        a.notifyItemChanged(getItemCount() - 1, ELLIPSIS_COUNT_CHANGED_PAYLOAD);
-                }
+            mEllipsisCount = -1;
+            if ((mEllipsize = ellipsize) && notify) {
+                RecyclerView rv;
+                RecyclerView.Adapter<?> a;
+                if ((rv = findRV()) != null && (a = rv.getAdapter()) != null)
+                    a.notifyItemChanged(getItemCount() - 1, ELLIPSIS_COUNT_CHANGED_PAYLOAD);
             }
             requestLayout();
         }
