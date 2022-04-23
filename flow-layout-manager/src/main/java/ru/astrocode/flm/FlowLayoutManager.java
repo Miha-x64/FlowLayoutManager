@@ -1,12 +1,16 @@
 package ru.astrocode.flm;
 
+import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
+import androidx.annotation.Px;
 import androidx.core.view.GravityCompat;
 import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.OrientationHelper;
@@ -20,6 +24,8 @@ import java.util.List;
  * Created by Astrocode on 26.05.18.
  */
 public class FlowLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider {
+
+    // TODO support Gravity.FILL_*, distribute size or space depending on layout params
 
     public static final Object ELLIPSIS_COUNT_CHANGED_PAYLOAD = new Object();
     private static final List<Object> ELLIPSIS_COUNT_CHANGED_PAYLOAD_LIST = Collections.singletonList(ELLIPSIS_COUNT_CHANGED_PAYLOAD);
@@ -43,12 +49,28 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private int mSpacingBetweenItems;
     private int mSpacingBetweenLines;
 
-    private FLMLayoutManagerHelper mLayoutManagerHelper;
+    private LMHelper mLayoutManagerHelper;
 
     private final ArrayList<Line> mCurrentLines;
 
     private int mFirstItemAdapterIndex;
     private int mFirstLineStartPosition;
+
+    private static final int[] ATTRS = {
+        android.R.attr.orientation, android.R.attr.gravity,
+        android.R.attr.maxItemsPerRow, android.R.attr.spacing, android.R.attr.lineSpacingExtra,
+        android.R.attr.maxLines, android.R.attr.ellipsize,
+    };
+    public FlowLayoutManager(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+        this(context.obtainStyledAttributes(attrs, ATTRS, defStyleAttr, defStyleRes));
+    }
+    private FlowLayoutManager(TypedArray ta) {
+        this(
+            ta.getInt(0, VERTICAL), ta.getInt(1, Gravity.START),
+            ta.getInt(2, Integer.MAX_VALUE), ta.getDimensionPixelOffset(3, 0), ta.getDimensionPixelOffset(4, 0));
+        setMaxLines(ta.getInt(5, Integer.MAX_VALUE), ta.getInt(6, 0) == 3 /*ellipsize="end"*/, false);
+        ta.recycle();
+    }
 
     public FlowLayoutManager(int orientation) {
         this(orientation, Gravity.START, Integer.MAX_VALUE, 0, 0);
@@ -58,11 +80,11 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         this(orientation, gravity, Integer.MAX_VALUE, 0, 0);
     }
 
-    public FlowLayoutManager(int orientation, int gravity, int spacingBetweenItems, int spacingBetweenLines) {
+    public FlowLayoutManager(int orientation, int gravity, @Px int spacingBetweenItems, @Px int spacingBetweenLines) {
         this(orientation, gravity, Integer.MAX_VALUE, spacingBetweenItems, spacingBetweenLines);
     }
 
-    public FlowLayoutManager(int orientation, int gravity, int maxItemsInLine, int spacingBetweenItems, int spacingBetweenLines) {
+    public FlowLayoutManager(int orientation, int gravity, int maxItemsInLine, @Px int spacingBetweenItems, @Px int spacingBetweenLines) {
         mCurrentLines = new ArrayList<>();
 
         mGravity = gravity;
@@ -90,13 +112,12 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         }
         mOrientation = orientation;
 
-        mLayoutManagerHelper = FLMLayoutManagerHelper.createLayoutManagerHelper(this, orientation, mGravity);
+        mLayoutManagerHelper = LMHelper.createLayoutManagerHelper(this, orientation, mGravity);
     }
 
     @Override
     public RecyclerView.LayoutParams generateDefaultLayoutParams() {
-        return new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
+        return new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     @Override
@@ -174,7 +195,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             assertNotInLayoutOrScroll(null);
 
             mOrientation = orientation;
-            mLayoutManagerHelper = FLMLayoutManagerHelper.createLayoutManagerHelper(this, orientation, mGravity);
+            mLayoutManagerHelper = LMHelper.createLayoutManagerHelper(this, orientation, mGravity);
 
             requestLayout();
         }
@@ -266,7 +287,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         if (gravity != mGravity) {
             mGravity = gravity;
-            mLayoutManagerHelper.setGravity(gravity);
+            mLayoutManagerHelper.mGravity = gravity;
 
             requestLayout();
         }
@@ -369,26 +390,6 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         measureChildWithMargins(view, 0, 0);
     }
 
-    /**
-     * Arrange of views from start to end.
-     *
-     * @param itemsSize             Size(width - if orientation is VERTICAL or height - if orientation is HORIZONTAL) of all items(include spacing) in line.
-     * @param maxItemHeightOrWidth  Max item height(if VERTICAL) or width(if HORIZONTAL) in line.
-     * @param line                  Well, the line to lay out
-     */
-    private void layoutItemsToEnd(int itemsSize, int maxItemHeightOrWidth, Line line) {
-        int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
-        int childCount = getChildCount();
-        for (int i = line.mItemsCount; i > 0; i--) {
-            currentStart = layoutItem(
-                maxItemHeightOrWidth,
-                line.mStartValueOfTheHighestItem,
-                currentStart,
-                getChildAt(childCount - i)
-            );
-        }
-    }
-
     private int layoutItem(int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, View view) {
         final int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
         final int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
@@ -456,7 +457,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             currentAdapterIndex--;
         }
 
-        layoutItemsToStart(currentItemsSize - mSpacingBetweenItems, currentMaxValue, line.mItemsCount, line.mStartValueOfTheHighestItem);
+        layoutItemsToStart(currentItemsSize - mSpacingBetweenItems, currentMaxValue, line);
 
         return line;
     }
@@ -467,18 +468,17 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         return view;
     }
 
-    /**
-     * Arrange of views from end to start.
-     *
-     * @param itemsSize                  Size(width - if orientation is VERTICAL or height - if orientation is HORIZONTAL) of all items(include spacing) in line.
-     * @param maxItemHeightOrWidth       Max item height(if VERTICAL) or width(if HORIZONTAL) in line.
-     * @param itemsInLine                Item count in line.
-     * @param startValueOfTheHighestItem Start position(Top - if orientation is VERTICAL or Left - if orientation is HORIZONTAL) of the line.
-     */
-    private void layoutItemsToStart(int itemsSize, int maxItemHeightOrWidth, int itemsInLine, int startValueOfTheHighestItem) {
+    private void layoutItemsToEnd(int itemsSize, int maxItemHeightOrWidth, Line line) {
         int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
-        for (int i = 0; i < itemsInLine; i++) {
-            currentStart = layoutItem(maxItemHeightOrWidth, startValueOfTheHighestItem, currentStart, getChildAt(i));
+        int childCount = getChildCount();
+        for (int i = line.mItemsCount; i > 0; i--) {
+            currentStart = layoutItem(maxItemHeightOrWidth, line.mStartValueOfTheHighestItem, currentStart, getChildAt(childCount - i));
+        }
+    }
+    private void layoutItemsToStart(int itemsSize, int maxItemHeightOrWidth, Line line) {
+        int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
+        for (int i = 0; i < line.mItemsCount; i++) {
+            currentStart = layoutItem(maxItemHeightOrWidth, line.mStartValueOfTheHighestItem, currentStart, getChildAt(i));
         }
     }
 
@@ -711,238 +711,180 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     /**
      * Orientation and gravity helper.
      */
-    private static abstract class FLMLayoutManagerHelper {
+    private static abstract class LMHelper {
 
         RecyclerView.LayoutManager mLayoutManager;
         int mGravity;
 
-        private FLMLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int gravity) {
+        LMHelper(RecyclerView.LayoutManager layoutManager, int gravity) {
             mLayoutManager = layoutManager;
             mGravity = gravity;
         }
 
-        public void setGravity(int gravity) {
-            mGravity = gravity;
-        }
+        abstract int getEnd();
 
-        public abstract int getEnd();
+        abstract int getEndPadding();
 
-        public abstract int getEndPadding();
+        abstract int getLineSize();
 
-        public abstract int getLineSize();
+        abstract int getEndAfterPadding();
 
-        public abstract int getEndAfterPadding();
+        abstract int getStartAfterPadding();
 
-        public abstract int getStartAfterPadding();
+        abstract int getDecoratedStart(View view);
 
-        public abstract int getDecoratedStart(View view);
+        abstract int getDecoratedMeasurement(View view);
 
-        public abstract int getDecoratedMeasurement(View view);
+        abstract int getDecoratedMeasurementInOther(View view);
 
-        public abstract int getDecoratedMeasurementInOther(View view);
+        abstract int getStartPositionOfFirstItem(int itemsSize);
 
-        public abstract int getStartPositionOfFirstItem(int itemsSize);
+        abstract int getPositionOfCurrentItem(int itemMaxSize, int itemSize);
 
-        public abstract int getPositionOfCurrentItem(int itemMaxSize, int itemSize);
+        abstract void offsetChildren(int amount);
 
-        public abstract void offsetChildren(int amount);
-
-        public static FLMLayoutManagerHelper createLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int orientation, int gravity) {
+        static LMHelper createLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int orientation, int gravity) {
             switch (orientation) {
-                case VERTICAL:
-                    return createVerticalLayoutManagerHelper(layoutManager, gravity);
-                case HORIZONTAL:
-                    return createHorizontalLayoutManagerHelper(layoutManager, gravity);
-                default:
-                    throw new IllegalArgumentException(ERROR_UNKNOWN_ORIENTATION);
+                case VERTICAL: return new VHelper(layoutManager, gravity);
+                case HORIZONTAL: return new HHelper(layoutManager, gravity);
+                default: throw new IllegalArgumentException(ERROR_UNKNOWN_ORIENTATION);
             }
         }
 
-        private static FLMLayoutManagerHelper createVerticalLayoutManagerHelper(final RecyclerView.LayoutManager layoutManager, int gravity) {
-            return new FLMLayoutManagerHelper(layoutManager, gravity) {
-                @Override
-                public int getEnd() {
-                    return mLayoutManager.getHeight();
+        private static final class VHelper extends LMHelper {
+            VHelper(RecyclerView.LayoutManager layoutManager, int gravity) {
+                super(layoutManager, gravity);
+            }
+
+            @Override int getEnd() {
+                return mLayoutManager.getHeight();
+            }
+
+            @Override int getEndPadding() {
+                return mLayoutManager.getPaddingBottom();
+            }
+
+            @Override int getLineSize() {
+                return mLayoutManager.getWidth() - mLayoutManager.getPaddingLeft() - mLayoutManager.getPaddingRight();
+            }
+
+            @Override int getEndAfterPadding() {
+                return mLayoutManager.getHeight() - mLayoutManager.getPaddingBottom();
+            }
+
+            @Override int getStartAfterPadding() {
+                return mLayoutManager.getPaddingTop();
+            }
+
+            @Override int getDecoratedStart(View view) {
+                RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return this.mLayoutManager.getDecoratedTop(view) - params.topMargin;
+            }
+
+            @Override int getDecoratedMeasurement(View view) {
+                final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
+            }
+
+            @Override int getDecoratedMeasurementInOther(View view) {
+                final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
+            }
+
+            @Override int getStartPositionOfFirstItem(int itemsSize) {
+                int horizontalGravity = GravityCompat.getAbsoluteGravity(mGravity, mLayoutManager.getLayoutDirection());
+                switch (horizontalGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
+                    case Gravity.CENTER_HORIZONTAL:
+                        return (mLayoutManager.getWidth() - itemsSize) / 2;
+                    case Gravity.RIGHT:
+                        return mLayoutManager.getWidth() - mLayoutManager.getPaddingRight() - itemsSize;
+                    default:
+                        return mLayoutManager.getPaddingLeft();
                 }
+            }
 
-                @Override
-                public int getEndPadding() {
-                    return mLayoutManager.getPaddingBottom();
+            @Override int getPositionOfCurrentItem(int itemMaxSize, int itemSize) {
+                switch (mGravity & Gravity.VERTICAL_GRAVITY_MASK) {
+                    case Gravity.CENTER_VERTICAL:
+                        return (itemMaxSize - itemSize) / 2;
+                    case Gravity.BOTTOM:
+                        return itemMaxSize - itemSize;
+                    default:
+                        return  0;
                 }
+            }
 
-                @Override
-                public int getLineSize() {
-                    return mLayoutManager.getWidth() - mLayoutManager.getPaddingLeft() - mLayoutManager.getPaddingRight();
-                }
-
-                @Override
-                public int getEndAfterPadding() {
-                    return mLayoutManager.getHeight() - mLayoutManager.getPaddingBottom();
-                }
-
-                @Override
-                public int getStartAfterPadding() {
-                    return mLayoutManager.getPaddingTop();
-                }
-
-                @Override
-                public int getDecoratedStart(View view) {
-                    RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
-
-                    return this.mLayoutManager.getDecoratedTop(view) - params.topMargin;
-                }
-
-                @Override
-                public int getDecoratedMeasurement(View view) {
-                    final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
-
-                    return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
-                }
-
-                @Override
-                public int getDecoratedMeasurementInOther(View view) {
-                    final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
-
-                    return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
-                }
-
-                @Override
-                public int getStartPositionOfFirstItem(int itemsSize) {
-                    int horizontalGravity = GravityCompat.getAbsoluteGravity(mGravity, mLayoutManager.getLayoutDirection());
-                    int startPosition;
-
-                    switch (horizontalGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
-                        case Gravity.RIGHT:
-                            startPosition = mLayoutManager.getWidth() - mLayoutManager.getPaddingRight() - itemsSize;
-                            break;
-                        case Gravity.CENTER_HORIZONTAL:
-                            startPosition = (mLayoutManager.getWidth() - mLayoutManager.getPaddingLeft() - mLayoutManager.getPaddingRight()) / 2
-                                    - itemsSize / 2;
-                            break;
-                        default:
-                            startPosition = mLayoutManager.getPaddingLeft();
-                            break;
-                    }
-
-                    return startPosition;
-                }
-
-                @Override
-                public int getPositionOfCurrentItem(int itemMaxSize, int itemSize) {
-                    int verticalGravity = mGravity & Gravity.VERTICAL_GRAVITY_MASK;
-                    int currentPosition;
-
-                    switch (verticalGravity) {
-                        case Gravity.CENTER_VERTICAL:
-                            currentPosition = itemMaxSize / 2 - itemSize / 2;
-                            break;
-                        case Gravity.BOTTOM:
-                            currentPosition = itemMaxSize - itemSize;
-                            break;
-                        default:
-                            currentPosition = 0;
-                            break;
-                    }
-                    return currentPosition;
-                }
-
-                @Override
-                public void offsetChildren(int amount) {
-                    mLayoutManager.offsetChildrenVertical(amount);
-                }
-            };
+            @Override void offsetChildren(int amount) {
+                mLayoutManager.offsetChildrenVertical(amount);
+            }
         }
 
-        private static FLMLayoutManagerHelper createHorizontalLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int gravity) {
-            return new FLMLayoutManagerHelper(layoutManager, gravity) {
+        private static final class HHelper extends LMHelper {
 
-                @Override
-                public int getEnd() {
-                    return mLayoutManager.getWidth();
+            HHelper(RecyclerView.LayoutManager layoutManager, int gravity) {
+                super(layoutManager, gravity);
+            }
+
+            @Override int getEnd() {
+                return mLayoutManager.getWidth();
+            }
+
+            @Override int getEndPadding() {
+                return mLayoutManager.getPaddingRight();
+            }
+
+            @Override int getLineSize() {
+                return mLayoutManager.getHeight() - mLayoutManager.getPaddingTop() - mLayoutManager.getPaddingBottom();
+            }
+
+            @Override int getEndAfterPadding() {
+                return mLayoutManager.getWidth() - mLayoutManager.getPaddingRight();
+            }
+
+            @Override int getStartAfterPadding() {
+                return mLayoutManager.getPaddingLeft();
+            }
+
+            @Override int getDecoratedStart(View view) {
+                RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return this.mLayoutManager.getDecoratedLeft(view) - params.leftMargin;
+            }
+
+            @Override int getDecoratedMeasurement(View view) {
+                return mLayoutManager.getDecoratedMeasuredWidth(view);
+            }
+
+            @Override int getDecoratedMeasurementInOther(View view) {
+                return mLayoutManager.getDecoratedMeasuredHeight(view);
+            }
+
+            @Override int getStartPositionOfFirstItem(int itemsSize) {
+                int verticalGravity = mGravity & Gravity.VERTICAL_GRAVITY_MASK;
+                switch (verticalGravity) {
+                    case Gravity.CENTER_VERTICAL:
+                        return  (mLayoutManager.getHeight() - itemsSize) / 2;
+                    case Gravity.BOTTOM:
+                        return mLayoutManager.getHeight() - mLayoutManager.getPaddingBottom() - itemsSize;
+                    default:
+                        return mLayoutManager.getPaddingTop();
                 }
+            }
 
-                @Override
-                public int getEndPadding() {
-                    return mLayoutManager.getPaddingRight();
+            @Override int getPositionOfCurrentItem(int itemMaxSize, int itemSize) {
+                int horizontalGravity = GravityCompat.getAbsoluteGravity(mGravity, mLayoutManager.getLayoutDirection());
+                switch (horizontalGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
+                    case Gravity.CENTER_HORIZONTAL:
+                        return (itemMaxSize - itemSize) / 2;
+                    case Gravity.RIGHT:
+                        return itemMaxSize - itemSize;
+                    default:
+                        return 0;
                 }
+            }
 
-                @Override
-                public int getLineSize() {
-                    return mLayoutManager.getHeight() - mLayoutManager.getPaddingTop() - mLayoutManager.getPaddingBottom();
-                }
-
-                @Override
-                public int getEndAfterPadding() {
-                    return mLayoutManager.getWidth() - mLayoutManager.getPaddingRight();
-                }
-
-                @Override
-                public int getStartAfterPadding() {
-                    return mLayoutManager.getPaddingLeft();
-                }
-
-                @Override
-                public int getDecoratedStart(View view) {
-                    RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
-
-                    return this.mLayoutManager.getDecoratedLeft(view) - params.leftMargin;
-                }
-
-                @Override
-                public int getDecoratedMeasurement(View view) {
-                    return mLayoutManager.getDecoratedMeasuredWidth(view);
-                }
-
-                @Override
-                public int getDecoratedMeasurementInOther(View view) {
-                    return mLayoutManager.getDecoratedMeasuredHeight(view);
-                }
-
-                @Override
-                public int getStartPositionOfFirstItem(int itemsSize) {
-                    int verticalGravity = mGravity & Gravity.VERTICAL_GRAVITY_MASK;
-                    int startPosition;
-
-                    switch (verticalGravity) {
-                        case Gravity.CENTER_VERTICAL:
-                            startPosition = (mLayoutManager.getHeight() - mLayoutManager.getPaddingTop() - mLayoutManager.getPaddingBottom()) / 2
-                                    - itemsSize / 2;
-                            break;
-                        case Gravity.BOTTOM:
-                            startPosition = mLayoutManager.getHeight() - mLayoutManager.getPaddingBottom() - itemsSize;
-                            break;
-                        default:
-                            startPosition = mLayoutManager.getPaddingTop();
-                            break;
-                    }
-
-                    return startPosition;
-                }
-
-                @Override
-                public int getPositionOfCurrentItem(int itemMaxSize, int itemSize) {
-                    int horizontalGravity = GravityCompat.getAbsoluteGravity(mGravity, mLayoutManager.getLayoutDirection());
-                    int currentPosition;
-
-                    switch (horizontalGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
-                        case Gravity.CENTER_HORIZONTAL:
-                            currentPosition = itemMaxSize / 2 - itemSize / 2;
-                            break;
-                        case Gravity.RIGHT:
-                            currentPosition = itemMaxSize - itemSize;
-                            break;
-                        default:
-                            currentPosition = 0;
-                            break;
-                    }
-                    return currentPosition;
-                }
-
-                @Override
-                public void offsetChildren(int amount) {
-                    mLayoutManager.offsetChildrenHorizontal(amount);
-                }
-            };
+            @Override void offsetChildren(int amount) {
+                mLayoutManager.offsetChildrenHorizontal(amount);
+            }
         }
     }
 }
