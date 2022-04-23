@@ -8,6 +8,7 @@ import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
+import android.view.View.MeasureSpec;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Px;
@@ -119,6 +120,11 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     }
 
     @Override
+    public boolean isAutoMeasureEnabled() {
+        return true;
+    }
+
+    @Override
     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
         Line currentLine = null;
 
@@ -140,7 +146,8 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
             topOrLeft = mSpacingBetweenLines + currentLine.mEndValueOfTheHighestItem;
 
-            if (currentLine.mEndValueOfTheHighestItem > mLayoutManagerHelper.getEndAfterPadding()) {
+            if (mLayoutManagerHelper.isFinite() &&
+                currentLine.mEndValueOfTheHighestItem > mLayoutManagerHelper.getEndAfterPadding()) {
                 break;
             }
         }
@@ -249,11 +256,11 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     }
 
     /**
-     * Returns number of hidden views, or -1, if ellipsize is disabled
+     * Returns number of hidden views, or -1 if the value is not known yet or ellipsize is disabled
      * @return number of hidden rows
      */
     public int ellipsisCount() {
-        return mEllipsize ? mEllipsisCount : -1;
+        return mEllipsisCount;
     }
 
     public FlowLayoutManager spacingBetweenItems(int spacingBetweenItems) {
@@ -332,33 +339,23 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             final int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
             final int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
 
-            if (line.mItemsCount == mMaxItemsInLine ||
-                (currentItemsSize + widthOrHeight) >= mLayoutManagerHelper.getLineSize()) {
-                isEndOfLine = true;
-
-                if (currentItemsSize == 0) {
-                    currentMaxValue = heightOrWidth;
-
-                    line.mEndValueOfTheHighestItem = line.mStartValueOfTheHighestItem + currentMaxValue;
-                    line.mItemsCount++;
-                } else {
-                    detachAndScrapView(view, recycler);
-                    continue;
-                }
-            } else {
-                if (heightOrWidth > currentMaxValue) {
-                    currentMaxValue = heightOrWidth;
-                    line.mEndValueOfTheHighestItem = line.mStartValueOfTheHighestItem + currentMaxValue;
-                }
-                line.mItemsCount++;
+            if ((currentItemsSize + widthOrHeight) > mLayoutManagerHelper.getLineSize()) {
+                detachAndScrapView(view, recycler);
+                break;
             }
-
+            if (line.mItemsCount == mMaxItemsInLine) {
+                isEndOfLine = true;
+            }
+            if (heightOrWidth > currentMaxValue) {
+                currentMaxValue = heightOrWidth;
+                line.mEndValueOfTheHighestItem = line.mStartValueOfTheHighestItem + currentMaxValue;
+            }
+            line.mItemsCount++;
             currentItemsSize += widthOrHeight + mSpacingBetweenItems;
-
             currentAdapterIndex++;
         }
 
-        if (lastLine && (mEllipsisCount = mEllipsize ? (contentItemCount() - currentAdapterIndex) : 0) > 0) {
+        if (lastLine && (mEllipsisCount = mEllipsize ? (contentItemCount() - currentAdapterIndex) : -1) > 0) {
             RecyclerView rv = findRV();
             View view = attach(recycler, contentItemCount(), -1);
             bindAndMeasureEllipsis(view, rv);
@@ -376,6 +373,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 View victim = getChildAt(getChildCount() - 2); // pre-last child
                 currentItemsSize -= mLayoutManagerHelper.getDecoratedMeasurementInOther(victim) + mSpacingBetweenItems;
                 line.mItemsCount--;
+                mEllipsisCount++;
                 detachAndScrapView(victim, recycler);
 
                 bindAndMeasureEllipsis(view, rv);
@@ -753,6 +751,8 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         abstract void offsetChildren(int amount);
 
+        abstract boolean isFinite();
+
         static LMHelper createLayoutManagerHelper(RecyclerView.LayoutManager layoutManager, int orientation, int gravity) {
             switch (orientation) {
                 case VERTICAL: return new VHelper(layoutManager, gravity);
@@ -827,6 +827,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             @Override void offsetChildren(int amount) {
                 mLayoutManager.offsetChildrenVertical(amount);
             }
+
+            @Override boolean isFinite() {
+                return mLayoutManager.getHeight() != 0 || mLayoutManager.getHeightMode() != MeasureSpec.UNSPECIFIED;
+            }
         }
 
         private static final class HHelper extends LMHelper {
@@ -894,6 +898,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
             @Override void offsetChildren(int amount) {
                 mLayoutManager.offsetChildrenHorizontal(amount);
+            }
+
+            @Override boolean isFinite() {
+                return mLayoutManager.getWidth() != 0 || mLayoutManager.getWidthMode() != MeasureSpec.UNSPECIFIED;
             }
         }
     }
