@@ -17,7 +17,7 @@ allprojects {
 
 // app
 dependencies {
-   implementation 'com.github.Miha-x64:FlowLayoutManager:38ac5a4e'
+   implementation 'com.github.Miha-x64:FlowLayoutManager:941aad5e'
 }
 ```
 
