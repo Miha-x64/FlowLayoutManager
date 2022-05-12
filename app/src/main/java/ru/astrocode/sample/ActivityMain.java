@@ -40,7 +40,7 @@ public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBar
 
         final RecyclerView recyclerView = new RecyclerView(this);
         root.addView(recyclerView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        recyclerView.setPadding(spacing, spacing, spacing, spacing);
+        recyclerView.setPadding(spacing, 4 * spacing, spacing, 4 * spacing);
         recyclerView.setClipToPadding(false);
         recyclerView.setLayoutManager(lm.spacingBetweenItems(spacing).spacingBetweenLines(spacing));
         recyclerView.setAdapter(new Adapter(this, lm));

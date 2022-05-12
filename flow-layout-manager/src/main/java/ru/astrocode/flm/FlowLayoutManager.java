@@ -129,7 +129,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         Line currentLine = null;
 
         if (mFirstLineStartPosition == -1) {
-            mFirstLineStartPosition = mLayoutManagerHelper.getStartAfterPadding();
+            mFirstLineStartPosition = mLayoutManagerHelper.getStartPadding();
         }
 
         int topOrLeft = mFirstLineStartPosition;
@@ -147,7 +147,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             topOrLeft = mSpacingBetweenLines + currentLine.mEndValueOfTheHighestItem;
 
             if (mLayoutManagerHelper.isFinite() &&
-                currentLine.mEndValueOfTheHighestItem > mLayoutManagerHelper.getEndAfterPadding()) {
+                currentLine.mEndValueOfTheHighestItem > mLayoutManagerHelper.getEnd()) {
                 break;
             }
         }
@@ -498,9 +498,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private int addLinesToStartAndDeleteFromEnd(int offset, RecyclerView.Recycler recycler) {
         Line line = mCurrentLines.get(0);
 
-        final int availableOffset = line.mStartValueOfTheHighestItem - mLayoutManagerHelper.getStartAfterPadding();
-
-        int currentOffset = Math.max(availableOffset, offset);
+        int currentOffset = Math.max(line.mStartValueOfTheHighestItem, offset);
         int adapterViewIndex = getPosition(getChildAt(0)) - 1;
 
         int startValueOfNewLine = line.mStartValueOfTheHighestItem - mSpacingBetweenLines;
@@ -523,7 +521,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             adapterViewIndex -= line.mItemsCount;
         }
 
-        return Math.max(currentOffset, offset);
+        return Math.max(currentOffset - mLayoutManagerHelper.getStartPadding(), offset);
     }
 
     /**
@@ -536,8 +534,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         Line lineToDel = mCurrentLines.get(mCurrentLines.size() - 1);
 
         while (lineToDel != null) {
-            if (lineToDel.mStartValueOfTheHighestItem - offset >
-                    mLayoutManagerHelper.getEndAfterPadding()) {
+            if (lineToDel.mStartValueOfTheHighestItem - offset > mLayoutManagerHelper.getEnd()) {
                 for (int i = 0; i < lineToDel.mItemsCount; i++) {
                     removeAndRecycleView(getChildAt(getChildCount() - 1), recycler);
                 }
@@ -559,21 +556,19 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private int addLinesToEndAndDeleteFromStart(int offset, RecyclerView.Recycler recycler) {
         Line line = mCurrentLines.get(mCurrentLines.size() - 1);
 
-        int availableOffset = Math.max(0,
-            line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd() + mLayoutManagerHelper.getEndPadding());
-
-        int currentOffset = Math.min(availableOffset, offset);
+        int endPadding = mLayoutManagerHelper.getEndPadding();
+        int currentOffset = Math.max(0, line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd() + endPadding);
         int adapterViewIndex = getPosition(getChildAt(getChildCount() - 1)) + 1;
 
         int startValueOfNewLine = line.mEndValueOfTheHighestItem + mSpacingBetweenLines;
 
         while (adapterViewIndex < contentItemCount() && mCurrentLines.size() < mMaxLines) {
 
-            if (currentOffset >= offset) {
+            if ((currentOffset - endPadding) >= offset) {
                 deleteLinesFromStart(offset, recycler);
                 break;
             } else {
-                deleteLinesFromStart(currentOffset, recycler);
+                deleteLinesFromStart(currentOffset - endPadding, recycler);
             }
 
             line = addLineToEnd(adapterViewIndex, startValueOfNewLine, recycler, mCurrentLines.size() + 1 == mMaxLines);
@@ -581,10 +576,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
             startValueOfNewLine = line.mEndValueOfTheHighestItem + mSpacingBetweenLines;
 
-            currentOffset = line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd();
+            currentOffset = Math.max(0, line.mEndValueOfTheHighestItem - mLayoutManagerHelper.getEnd());
             adapterViewIndex += line.mItemsCount;
         }
-
 
         return Math.min(currentOffset, offset);
     }
@@ -599,8 +593,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         Line lineToDel = mCurrentLines.get(0);
 
         while (lineToDel != null) {
-            if (lineToDel.mEndValueOfTheHighestItem - offset <
-                    mLayoutManagerHelper.getStartAfterPadding()) {
+            if (lineToDel.mEndValueOfTheHighestItem - offset < 0) {
                 for (int i = 0; i < lineToDel.mItemsCount; i++) {
                     removeAndRecycleView(getChildAt(0), recycler);
                 }
@@ -732,9 +725,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         abstract int getLineSize();
 
-        abstract int getEndAfterPadding();
-
-        abstract int getStartAfterPadding();
+        abstract int getStartPadding();
 
         abstract int getDecoratedStart(View view);
 
@@ -775,11 +766,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 return mLayoutManager.getWidth() - mLayoutManager.getPaddingLeft() - mLayoutManager.getPaddingRight();
             }
 
-            @Override int getEndAfterPadding() {
-                return mLayoutManager.getHeight() - mLayoutManager.getPaddingBottom();
-            }
-
-            @Override int getStartAfterPadding() {
+            @Override int getStartPadding() {
                 return mLayoutManager.getPaddingTop();
             }
 
@@ -848,11 +835,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 return mLayoutManager.getHeight() - mLayoutManager.getPaddingTop() - mLayoutManager.getPaddingBottom();
             }
 
-            @Override int getEndAfterPadding() {
-                return mLayoutManager.getWidth() - mLayoutManager.getPaddingRight();
-            }
-
-            @Override int getStartAfterPadding() {
+            @Override int getStartPadding() {
                 return mLayoutManager.getPaddingLeft();
             }
 
@@ -862,11 +845,13 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             }
 
             @Override int getDecoratedMeasurement(View view) {
-                return mLayoutManager.getDecoratedMeasuredWidth(view);
+                final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
             }
 
             @Override int getDecoratedMeasurementInOther(View view) {
-                return mLayoutManager.getDecoratedMeasuredHeight(view);
+                final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
             }
 
             @Override int getStartPositionOfFirstItem(int itemsSize) {
