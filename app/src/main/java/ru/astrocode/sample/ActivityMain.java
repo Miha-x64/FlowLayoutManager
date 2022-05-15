@@ -38,7 +38,8 @@ public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBar
         mMaxLineBar.setProgress(mMaxLineBar.getMax());
         root.addView(mMaxLineBar);
 
-        final RecyclerView recyclerView = new RecyclerView(this);
+        final RecyclerView recyclerView =
+            (RecyclerView) getLayoutInflater().inflate(R.layout.recycler_with_scrollbars, null);
         root.addView(recyclerView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         recyclerView.setPadding(spacing, 4 * spacing, spacing, 4 * spacing);
         recyclerView.setClipToPadding(false);

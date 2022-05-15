@@ -719,6 +719,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             mGravity = gravity;
         }
 
+        final int getTotalSpace() {
+            return getEnd() - getStartPadding() - getEndPadding();
+        }
+
         abstract int getEnd();
 
         abstract int getEndPadding();
@@ -728,6 +732,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         abstract int getStartPadding();
 
         abstract int getDecoratedStart(View view);
+        abstract int getDecoratedEnd(View view);
 
         abstract int getDecoratedMeasurement(View view);
 
@@ -773,6 +778,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             @Override int getDecoratedStart(View view) {
                 RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return this.mLayoutManager.getDecoratedTop(view) - params.topMargin;
+            }
+            @Override int getDecoratedEnd(View view) {
+                RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return this.mLayoutManager.getDecoratedBottom(view) + params.bottomMargin;
             }
 
             @Override int getDecoratedMeasurement(View view) {
@@ -843,6 +852,10 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return this.mLayoutManager.getDecoratedLeft(view) - params.leftMargin;
             }
+            @Override int getDecoratedEnd(View view) {
+                RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
+                return this.mLayoutManager.getDecoratedRight(view) + params.rightMargin;
+            }
 
             @Override int getDecoratedMeasurement(View view) {
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
@@ -887,4 +900,255 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
             }
         }
     }
+
+    // LinearLayoutManager copy-paste, important both for scrollbars and nested scroll
+
+    /**
+     * Works the same way as {@link android.widget.AbsListView#setSmoothScrollbarEnabled(boolean)}.
+     * see {@link android.widget.AbsListView#setSmoothScrollbarEnabled(boolean)}
+     */
+    private boolean mSmoothScrollbarEnabled = true;
+
+    /**
+     * When smooth scrollbar is enabled, the position and size of the scrollbar thumb is computed
+     * based on the number of visible pixels in the visible items. This however assumes that all
+     * list items have similar or equal widths or heights (depending on list orientation).
+     * If you use a list in which items have different dimensions, the scrollbar will change
+     * appearance as the user scrolls through the list. To avoid this issue,  you need to disable
+     * this property.
+     *
+     * When smooth scrollbar is disabled, the position and size of the scrollbar thumb is based
+     * solely on the number of items in the adapter and the position of the visible items inside
+     * the adapter. This provides a stable scrollbar as the user navigates through a list of items
+     * with varying widths / heights.
+     *
+     * @param enabled Whether to enable smooth scrollbar.
+     * @see #isSmoothScrollbarEnabled()
+     */
+    public void setSmoothScrollbarEnabled(boolean enabled) { // mimic LLM API
+        mSmoothScrollbarEnabled = enabled;
+    }
+    public FlowLayoutManager smoothScrollbar(boolean enabled) { // compact builder-style
+        mSmoothScrollbarEnabled = enabled;
+        return this;
+    }
+
+    /**
+     * Returns the current state of the smooth scrollbar feature. It is enabled by default.
+     *
+     * @return True if smooth scrollbar is enabled, false otherwise.
+     * @see #setSmoothScrollbarEnabled(boolean)
+     */
+    public boolean isSmoothScrollbarEnabled() {
+        return mSmoothScrollbarEnabled;
+    }
+
+    @Override public int computeHorizontalScrollOffset(RecyclerView.State state) {
+        return computeScrollOffset(state);
+    }
+    @Override public int computeVerticalScrollOffset(RecyclerView.State state) {
+        return computeScrollOffset(state);
+    }
+    @Override public int computeHorizontalScrollExtent(RecyclerView.State state) {
+        return computeScrollExtent(state);
+    }
+    @Override public int computeVerticalScrollExtent(RecyclerView.State state) {
+        return computeScrollExtent(state);
+    }
+    @Override public int computeHorizontalScrollRange(RecyclerView.State state) {
+        return computeScrollRange(state);
+    }
+    @Override public int computeVerticalScrollRange(RecyclerView.State state) {
+        return computeScrollRange(state);
+    }
+
+    private int computeScrollOffset(RecyclerView.State state) {
+        if (getChildCount() == 0 || state.getItemCount() == 0) return 0;
+        return computeScrollOffset(state,
+            findFirstVisibleChildClosestToStart(!mSmoothScrollbarEnabled),
+            findFirstVisibleChildClosestToEnd(!mSmoothScrollbarEnabled),
+            mSmoothScrollbarEnabled);
+    }
+
+    private int computeScrollExtent(RecyclerView.State state) {
+        if (getChildCount() == 0 || state.getItemCount() == 0) return 0;
+        return computeScrollExtent(state,
+            findFirstVisibleChildClosestToStart(!mSmoothScrollbarEnabled),
+            findFirstVisibleChildClosestToEnd(!mSmoothScrollbarEnabled),
+            mSmoothScrollbarEnabled);
+    }
+
+    private int computeScrollRange(RecyclerView.State state) {
+        if (getChildCount() == 0 || state.getItemCount() == 0) return 0;
+        return computeScrollRange(state,
+            findFirstVisibleChildClosestToStart(!mSmoothScrollbarEnabled),
+            findFirstVisibleChildClosestToEnd(!mSmoothScrollbarEnabled),
+            mSmoothScrollbarEnabled);
+    }
+
+    /**
+     * Convenience method to find the visible child closes to start. Caller should check if it has
+     * enough children.
+     *
+     * @param completelyVisible Whether child should be completely visible or not
+     * @return The first visible child closest to start of the layout from user's perspective.
+     */
+    View findFirstVisibleChildClosestToStart(boolean completelyVisible) {
+        return findOneVisibleChild(0, getChildCount(), completelyVisible);
+    }
+
+    /**
+     * Convenience method to find the visible child closes to end. Caller should check if it has
+     * enough children.
+     *
+     * @param completelyVisible Whether child should be completely visible or not
+     * @return The first visible child closest to end of the layout from user's perspective.
+     */
+    View findFirstVisibleChildClosestToEnd(boolean completelyVisible) {
+        return findOneVisibleChild(getChildCount() - 1, -1, completelyVisible);
+    }
+
+    // Returns the first child that is visible in the provided index range, i.e. either partially or
+    // fully visible depending on the arguments provided. Completely invisible children are not
+    // acceptable by this method, but could be returned
+    // using #findOnePartiallyOrCompletelyInvisibleChild
+    View findOneVisibleChild(int fromIndex, int toIndex, boolean completelyVisible) {
+        int preferredBoundsFlag = completelyVisible ? (1 | 2 | 16384 | 8192) : (64 | 256);
+        return findOneViewWithinBoundFlags(fromIndex, toIndex, preferredBoundsFlag);
+    }
+
+    // ScrollBarHelper copy-paste
+
+    /**
+     * @param startChild View closest to start of the list. (top or left)
+     * @param endChild   View closest to end of the list (bottom or right)
+     */
+    int computeScrollOffset(RecyclerView.State state, View startChild, View endChild, boolean smoothScrollbarEnabled) {
+        if (startChild == null || endChild == null) return 0;
+        final int minPosition = Math.min(getPosition(startChild), getPosition(endChild));
+        final int itemsBefore = Math.max(0, minPosition);
+        if (!smoothScrollbarEnabled) return itemsBefore;
+
+        LMHelper orientation = mLayoutManagerHelper;
+        final int laidOutArea =
+            Math.abs(orientation.getDecoratedEnd(endChild) - orientation.getDecoratedStart(startChild));
+        final int itemRange =
+            Math.abs(getPosition(startChild) - getPosition(endChild)) + 1;
+        final float avgSizePerRow = (float) laidOutArea / itemRange;
+
+        return Math.round(
+            itemsBefore * avgSizePerRow + (orientation.getStartPadding() - orientation.getDecoratedStart(startChild))
+        );
+    }
+
+    /**
+     * @param startChild View closest to start of the list. (top or left)
+     * @param endChild   View closest to end of the list (bottom or right)
+     */
+    int computeScrollExtent(RecyclerView.State state, View startChild, View endChild, boolean smoothScrollbarEnabled) {
+        if (startChild == null || endChild == null) return 0;
+        if (!smoothScrollbarEnabled) return Math.abs(getPosition(startChild) - getPosition(endChild)) + 1;
+        LMHelper orientation = mLayoutManagerHelper;
+        final int extend = orientation.getDecoratedEnd(endChild) - orientation.getDecoratedStart(startChild);
+        return Math.min(orientation.getTotalSpace(), extend);
+    }
+
+    /**
+     * @param startChild View closest to start of the list. (top or left)
+     * @param endChild   View closest to end of the list (bottom or right)
+     */
+    int computeScrollRange(RecyclerView.State state, View startChild, View endChild, boolean smoothScrollbarEnabled) {
+        if (startChild == null || endChild == null) return 0;
+        if (!smoothScrollbarEnabled) return state.getItemCount();
+        // smooth scrollbar enabled. try to estimate better.
+        LMHelper orientation = mLayoutManagerHelper;
+        final int laidOutArea = orientation.getDecoratedEnd(endChild) - orientation.getDecoratedStart(startChild);
+        final int laidOutRange = Math.abs(getPosition(startChild) - getPosition(endChild)) + 1;
+        // estimate a size for full list.
+        return (int) ((float) laidOutArea / laidOutRange * state.getItemCount());
+    }
+    
+    // ViewBoundsCheck copy-paste
+
+    BoundFlags mBoundFlags = new BoundFlags();
+
+    /**
+     * Returns the first view starting from fromIndex to toIndex in views whose bounds lie within
+     * its parent bounds based on the provided preferredBoundFlags. If no match is found based on
+     * the preferred flags, and a nonzero acceptableBoundFlags is specified, the last view whose
+     * bounds lie within its parent view based on the acceptableBoundFlags is returned. If no such
+     * view is found based on either of these two flags, null is returned.
+     *
+     * @param fromIndex           The view position index to start the search from.
+     * @param toIndex             The view position index to end the search at.
+     * @param preferredBoundFlags The flags indicating the preferred match. Once a match is found
+     *                            based on this flag, that view is returned instantly.
+     * @return The first view that satisfies acceptableBoundFlags or the last view satisfying
+     * acceptableBoundFlags boundary conditions.
+     */
+    View findOneViewWithinBoundFlags(int fromIndex, int toIndex, int preferredBoundFlags) {
+        LMHelper orientation = mLayoutManagerHelper;
+        final int start = orientation.getStartPadding();
+        final int end = orientation.getEnd() - orientation.getEndPadding();
+        final int next = toIndex > fromIndex ? 1 : -1;
+        View acceptableMatch = null;
+        for (int i = fromIndex; i != toIndex; i += next) {
+            final View child = getChildAt(i);
+            final int childStart = orientation.getDecoratedStart(child);
+            final int childEnd = orientation.getDecoratedEnd(child);
+            mBoundFlags.setBounds(start, end, childStart, childEnd);
+            if (preferredBoundFlags != 0) {
+                mBoundFlags.resetFlags();
+                mBoundFlags.addFlags(preferredBoundFlags);
+                if (mBoundFlags.boundsMatch()) {
+                    // found a perfect match
+                    return child;
+                }
+            }
+            mBoundFlags.resetFlags();
+            mBoundFlags.addFlags(320);
+            if (mBoundFlags.boundsMatch()) {
+                acceptableMatch = child;
+            }
+        }
+        return acceptableMatch;
+    }
+
+    static class BoundFlags {
+        int mBoundFlags = 0;
+        int mRvStart, mRvEnd, mChildStart, mChildEnd;
+
+        void setBounds(int rvStart, int rvEnd, int childStart, int childEnd) {
+            mRvStart = rvStart;
+            mRvEnd = rvEnd;
+            mChildStart = childStart;
+            mChildEnd = childEnd;
+        }
+
+        void addFlags(int flags) {
+            mBoundFlags |= flags;
+        }
+
+        void resetFlags() {
+            mBoundFlags = 0;
+        }
+
+        static int compare(int x, int y) {
+            if (x > y) return 1;
+            if (x == y) return 2;
+            return 4;
+        }
+
+        boolean boundsMatch() {
+            return match(0, mChildStart, mRvStart) &&
+                match(4, mChildStart, mRvEnd) &&
+                match(8, mChildEnd, mRvStart) &&
+                match(12, mChildEnd, mRvEnd);
+        }
+
+        private boolean match(int i, int mChildStart, int mRvStart) {
+            return (mBoundFlags & (7 << i)) == 0 || (mBoundFlags & (compare(mChildStart, mRvStart) << i)) != 0;
+        }
+    }
+
 }
