@@ -10,6 +10,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.View.MeasureSpec;
 import android.view.ViewGroup;
+import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Px;
 import androidx.core.view.GravityCompat;
@@ -46,6 +47,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private int mMaxLines = Integer.MAX_VALUE;
     private boolean mEllipsize = false;
     private int mEllipsisCount = -1;
+    private int mLookBehind = 0;
 
     private int mSpacingBetweenItems;
     private int mSpacingBetweenLines;
@@ -250,6 +252,20 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     }
     public boolean ellipsize() {
         return mEllipsize;
+    }
+
+    /**
+     * Avoid having different layout when scrolling back. Sacrifice performance by measuring extra views.
+     * Useful mainly when there are several MATCH_PARENT items which separate the layout into different sub-flows.
+     * @param count max number of views to bind and measure
+     */
+    public FlowLayoutManager lookBehind(@IntRange(from = 0L) int count) {
+        if (count < 0) throw new IllegalArgumentException();
+        this.mLookBehind = count;
+        return this;
+    }
+    public int lookBehind() {
+        return mLookBehind;
     }
 
     /**
@@ -468,9 +484,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         return line;
     }
 
-    private View attach(RecyclerView.Recycler recycler, int adapterPosition, int layoutPosition) {
+    private View attach(RecyclerView.Recycler recycler, int adapterPosition, int at) {
         final View view = recycler.getViewForPosition(adapterPosition);
-        addView(view, layoutPosition);
+        addView(view, at);
         return view;
     }
 
@@ -503,6 +519,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         int startValueOfNewLine = line.mStartValueOfTheHighestItem - mSpacingBetweenLines;
 
+        boolean lookBehind = mLookBehind > 0;
         while (adapterViewIndex >= 0) {
 
             if (currentOffset <= offset) {
@@ -510,9 +527,15 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 break;
             } else {
                 deleteLinesFromEnd(currentOffset, recycler);
+
+                // potential sub-flow, measure a chunk
+                line = lookBehind && line.mItemsCount == 1
+                    ? lookBehind(adapterViewIndex, startValueOfNewLine, recycler)
+                    : null;
             }
 
-            line = addLineToStart(adapterViewIndex, startValueOfNewLine, recycler);
+            if (line == null)
+                line = addLineToStart(adapterViewIndex, startValueOfNewLine, recycler);
             mCurrentLines.add(0, line);
 
             startValueOfNewLine = line.mStartValueOfTheHighestItem - mSpacingBetweenLines;
@@ -522,6 +545,62 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         }
 
         return Math.max(currentOffset - mLayoutManagerHelper.getStartPadding(), offset);
+    }
+
+    private Line lookBehind(int adapterViewIndex, int end, RecyclerView.Recycler recycler) {
+//      long time = System.nanoTime();
+
+        int lookedBehind = 0; // add all the necessary views for the chunk
+        while (adapterViewIndex - lookedBehind >= 0 && lookedBehind < mLookBehind) {
+            View v = recycler.getViewForPosition(adapterViewIndex - lookedBehind);
+            if (mLayoutManagerHelper.getSizeInLine(v) == ViewGroup.LayoutParams.MATCH_PARENT) {
+                recycler.recycleView(v);
+                break;
+            } else {
+                lookedBehind++;
+                addView(v, 0);
+            }
+        }
+
+        // now go forward, pretend to lay them out, and scrap useless ones
+        int currentLineSize = 0;
+        int currentMaxValue = 0;
+        Line line = new Line();
+        line.mEndValueOfTheHighestItem = end;
+        for (int i = 0; i < lookedBehind; i++) {
+            View view = getChildAt(line.mItemsCount);
+            measureChildWithMargins(view, 0, 0);
+            final int widthOrHeight = mLayoutManagerHelper.getDecoratedMeasurementInOther(view);
+            final int heightOrWidth = mLayoutManagerHelper.getDecoratedMeasurement(view);
+            if (line.mItemsCount == mMaxItemsInLine || (currentLineSize + widthOrHeight) >= mLayoutManagerHelper.getLineSize()) {
+                if (currentLineSize == 0) line.mItemsCount++;
+                else i--;
+                for (int x = 0; x < line.mItemsCount; x++)
+                    detachAndScrapViewAt(0, recycler);
+                line.mItemsCount = 0;
+                currentLineSize = 0;
+                currentMaxValue = 0;
+            } else {
+                line.mItemsCount++;
+                currentLineSize += widthOrHeight + mSpacingBetweenItems;
+                if (heightOrWidth > currentMaxValue) {
+                    currentMaxValue = heightOrWidth;
+                    line.mStartValueOfTheHighestItem = line.mEndValueOfTheHighestItem - currentMaxValue;
+                }
+            }
+        }
+
+        // lay out the last line
+        if (line.mItemsCount > 0) {
+            layoutItemsToStart(currentLineSize - mSpacingBetweenItems, currentMaxValue, line);
+            return line;
+        } else {
+            return null;
+        }
+        /* finally {
+            time = System.nanoTime() - time;
+            Log.i("FlowLayoutManager", "lookBehind (" + lookedBehind + ") took " + time / 1000 / 1000.0 + "ms");
+        } */
     }
 
     /**
@@ -735,8 +814,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         abstract int getDecoratedEnd(View view);
 
         abstract int getDecoratedMeasurement(View view);
-
         abstract int getDecoratedMeasurementInOther(View view);
+
+        abstract int getSizeInLine(View view);
 
         abstract int getStartPositionOfFirstItem(int itemsSize);
 
@@ -788,10 +868,13 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
             }
-
             @Override int getDecoratedMeasurementInOther(View view) {
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
+            }
+
+            @Override int getSizeInLine(View view) {
+                return view.getLayoutParams().width;
             }
 
             @Override int getStartPositionOfFirstItem(int itemsSize) {
@@ -861,10 +944,13 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
             }
-
             @Override int getDecoratedMeasurementInOther(View view) {
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
+            }
+
+            @Override int getSizeInLine(View view) {
+                return view.getLayoutParams().height;
             }
 
             @Override int getStartPositionOfFirstItem(int itemsSize) {
