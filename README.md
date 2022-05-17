@@ -3,6 +3,9 @@
 * AndroidX
 * Support for maxLines and ellipsize
 * autoMeasure (wrap_content) support
+* handling clipToPadding=false correctly
+* scrollbars and nested scroll support
+* lookBehind feature for correct sub-flow layout
 
 ![Example vertical](flow_layout_manager_vertical_ellipsized.gif)
 
@@ -17,7 +20,7 @@ allprojects {
 
 // app
 dependencies {
-   implementation 'com.github.Miha-x64:FlowLayoutManager:d5b4bee1'
+   implementation 'com.github.Miha-x64:FlowLayoutManager:87794393'
 }
 ```
 
