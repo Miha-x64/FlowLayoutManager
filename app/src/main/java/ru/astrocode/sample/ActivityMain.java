@@ -1,163 +1,159 @@
 package ru.astrocode.sample;
 
-import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.*;
+import android.widget.CheckBox;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.recyclerview.widget.RecyclerView;
 import ru.astrocode.flm.FlowLayoutManager;
 
-import java.util.ArrayList;
+import java.util.*;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBarChangeListener {
+public class ActivityMain extends AppCompatActivity
+    implements SeekBar.OnSeekBarChangeListener, View.OnClickListener, View.OnLongClickListener {
 
-    SeekBar mMaxLineBar;
-    FlowLayoutManager lm =
-        new FlowLayoutManager(RecyclerView.VERTICAL, Gravity.CENTER)
-            .lookBack(FlowLayoutManager.LookBack.EXACT);
+    private SeekBar mMaxLineBar;
+    private FlowLayoutManager lm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        setContentView(R.layout.activity_main);
 
-        int spacing = getResources().getDimensionPixelSize(R.dimen.spacing);
-        mMaxLineBar = new SeekBar(this);
-        mMaxLineBar.setPadding(mMaxLineBar.getPaddingLeft(), spacing, mMaxLineBar.getPaddingRight(), spacing);
+        RecyclerView rv = findViewById(R.id.rv);
+        rv.getRecycledViewPool().setMaxRecycledViews(0, 20);
+        lm = ((FlowLayoutManager) rv.getLayoutManager()).lookBack(FlowLayoutManager.LookBack.EXACT);
+        Adapter adapter = new Adapter(lm, Arrays.asList(getResources().getStringArray(R.array.Countries)));
+        rv.setAdapter(adapter);
+
+        mMaxLineBar = findViewById(R.id.maxLineBar);
         mMaxLineBar.setMax(24);
         mMaxLineBar.setOnSeekBarChangeListener(this);
         mMaxLineBar.setProgress(mMaxLineBar.getMax());
-        root.addView(mMaxLineBar);
 
-        final RecyclerView recyclerView =
-            (RecyclerView) getLayoutInflater().inflate(R.layout.recycler_with_scrollbars, null);
-        root.addView(recyclerView, new LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f));
-        recyclerView.setPadding(spacing, 4 * spacing, spacing, 4 * spacing);
-        recyclerView.setClipToPadding(false);
-        recyclerView.setLayoutManager(lm.spacingBetweenItems(spacing).spacingBetweenLines(spacing));
-        recyclerView.setAdapter(new Adapter(this, lm));
-        setContentView(root);
+        CheckBox alpha = findViewById(R.id.alpha);
+        alpha.setOnCheckedChangeListener((_cb, checked) -> {
+            adapter.alphaIndex(checked);
+        });
     }
 
-    @Override
-    public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+    @Override public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
         lm.maxLines(i == seekBar.getMax() ? Integer.MAX_VALUE : (i + 1), true, true);
     }
     @Override public void onStartTrackingTouch(SeekBar seekBar) {}
     @Override public void onStopTrackingTouch(SeekBar seekBar) {}
 
-    private final class Adapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-        private final int mBtnCloseSize, mBtnCloseLeftMargin;
-
-        final ArrayList<Object /* String | Character*/> mData;
+    static final Collection<Object> COLLECTION_OF_NULL = Collections.singleton(null);
+    private final class Adapter extends RecyclerView.Adapter<VH> {
         private final FlowLayoutManager mLayoutManager;
+        private final ArrayList<Object /* String | Character*/> mData;
 
-        public Adapter(Context context, FlowLayoutManager layoutManager) {
-            String[] countries = context.getResources().getStringArray(R.array.Countries);
-            mData = new ArrayList<>(countries.length);
-            char last = '\0';
-            for (String country : countries) {
-                if (country.charAt(0) != last) mData.add(last = country.charAt(0));
-                mData.add(country);
+        Adapter(FlowLayoutManager layoutManager, List<String> countries) {
+            mData = new ArrayList<>(countries);
+            mLayoutManager = layoutManager;
+        }
+
+        @Override public int getItemCount() {
+            return mData.size() + 1;
+        }
+        private Object /* String | Character*/ getItemAt(int position) {
+            return position == mData.size()
+                ? mLayoutManager.ellipsisCount() + " more..."
+                : mData.get(position);
+        }
+
+        private boolean index = false;
+        void alphaIndex(boolean whether) {
+            if (index != whether) {
+                index = whether;
+                if (whether) {
+                    char last = '\0', current;
+                    for (int i = 0, size = mData.size(); i < size; i++)
+                        if ((current = ((String) mData.get(i)).charAt(0)) != last) {
+                            mData.add(i, last = current);
+                            notifyItemInserted(i++);
+                        }
+                } else {
+                    int removed = 0;
+                    for (int i = 0, size = mData.size(); i < size; i++) {
+                        if (mData.get(i) instanceof Character) {
+                            mData.set(i, null);
+                            notifyItemRemoved(i - removed++);
+                        }
+                    }
+                    mData.removeAll(COLLECTION_OF_NULL);
+                }
             }
-            this.mLayoutManager = layoutManager;
-            float dp = context.getResources().getDisplayMetrics().density;
-            mBtnCloseSize = Math.round(16 * dp);
-            mBtnCloseLeftMargin = Math.round(5 * dp);
         }
 
-        @Override
-        public int getItemViewType(int position) {
-            return position == mData.size() || mData.get(position) instanceof String ? 0 : 1;
+        @Override public int getItemViewType(int position) {
+            return getItemAt(position) instanceof String ? 0 : 1;
         }
 
-        @NonNull
-        @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        @NonNull @Override public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             return viewType == 0 ? chipHolder(parent) : titleHolder(parent);
         }
-        private ChipHolder chipHolder(ViewGroup parent) {
-            Context context = parent.getContext();
-
-            LinearLayout view = new LinearLayout(context);
-            view.setBackgroundResource(R.drawable.shape_chips);
-
-            TextView title = new TextView(context);
+        private VH chipHolder(ViewGroup parent) {
+            TextView title = new TextView(parent.getContext());
+            title.setBackgroundResource(R.drawable.shape_chips);
             title.setGravity(Gravity.CENTER);
             title.setTextColor(Color.BLACK);
             title.setTextSize(12f);
-            title.setId(R.id.textView);
-
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
-
-            view.addView(title, lp);
-
-            AppCompatImageButton imageButton = new AppCompatImageButton(context);
-            imageButton.setBackgroundResource(R.drawable.shape_chips_close_btn);
-            imageButton.setImageResource(R.drawable.ic_close);
-            imageButton.setScaleType(ImageView.ScaleType.FIT_XY);
-            imageButton.setId(R.id.imageButton);
-
-            lp = new LinearLayout.LayoutParams(mBtnCloseSize, mBtnCloseSize);
-            lp.leftMargin = mBtnCloseLeftMargin;
-
-            view.addView(imageButton, lp);
-
-            return new ChipHolder(view);
+            return new VH(title);
         }
-        private RecyclerView.ViewHolder titleHolder(ViewGroup parent) {
+        private VH titleHolder(ViewGroup parent) {
             TextView title = new TextView(parent.getContext());
             title.setTextColor(Color.BLACK);
             title.setTextSize(14f);
             RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             lp.leftMargin = lp.rightMargin = parent.getResources().getDimensionPixelSize(R.dimen.spacing);
             title.setLayoutParams(lp);
-            return new RecyclerView.ViewHolder(title) {};
+            return new VH(title);
         }
 
-        @Override
-        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-            if (holder instanceof ChipHolder) {
-                ((ChipHolder) holder).mText.setText(position == mData.size()
-                    ? (mLayoutManager.ellipsisCount() + " more...")
-                    : (String) mData.get(position));
-            } else {
-                ((TextView) holder.itemView).setText(mData.get(position).toString());
-            }
+        @Override public void onBindViewHolder(@NonNull VH holder, int position) {
+            ((TextView) holder.itemView).setText(getItemAt(position).toString());
+            boolean last = position == mData.size();
+            holder.itemView.setOnClickListener(last ? ActivityMain.this : null);
+            holder.itemView.setOnLongClickListener(last ? null : ActivityMain.this);
         }
 
-        @Override
-        public int getItemCount() {
-            return mData.size() + 1;
+        void removeAt(int position) {
+            mData.remove(position);
+            notifyItemRemoved(position);
         }
+    }
+    private static final class VH extends RecyclerView.ViewHolder {
+        VH(View itemView) {
+            super(itemView);
+        }
+    }
 
-        final class ChipHolder extends RecyclerView.ViewHolder {
-            final TextView mText;
-
-            public ChipHolder(View itemView) {
-                super(itemView);
-                mText = itemView.findViewById(R.id.textView);
-                itemView.findViewById(R.id.imageButton).setOnClickListener(view -> {
-                    int position = getBindingAdapterPosition();
-                    if (position == mData.size()) {
-                        mMaxLineBar.setProgress(mMaxLineBar.getMax());
-                    } else if (position >= 0) {
-                        mData.remove(position);
-                        notifyItemRemoved(position);
-                    }
-                });
-            }
-
+    @Override public void onClick(View view) {
+        removeOrExpand(view);
+    }
+    @Override public boolean onLongClick(View view) {
+        removeOrExpand(view);
+        return true;
+    }
+    private void removeOrExpand(View view) {
+        RecyclerView rv = (RecyclerView) view.getParent();
+        RecyclerView.ViewHolder holder = rv.getChildViewHolder(view);
+        int position = holder.getBindingAdapterPosition();
+        Adapter adapter = (Adapter) holder.getBindingAdapter();
+        if (position == adapter.getItemCount() - 1) {
+            mMaxLineBar.setProgress(mMaxLineBar.getMax());
+        } else if (position >= 0) {
+            adapter.removeAt(position);
         }
     }
 }

@@ -5,7 +5,7 @@
 * autoMeasure (wrap_content) support
 * handling clipToPadding=false correctly
 * scrollbars and nested scroll support
-* lookBehind feature for correct sub-flow layout
+* lookBack feature for correct layout when scrolling back
 
 ![Example vertical](flow_layout_manager_vertical_ellipsized.gif)
 
@@ -20,7 +20,7 @@ allprojects {
 
 // app
 dependencies {
-   implementation 'com.github.Miha-x64:FlowLayoutManager:87794393'
+   implementation 'com.github.Miha-x64:FlowLayoutManager:16ac6c80'
 }
 ```
 
