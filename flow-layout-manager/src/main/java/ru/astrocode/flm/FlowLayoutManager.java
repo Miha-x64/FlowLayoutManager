@@ -59,19 +59,24 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private int mFirstItemAdapterIndex;
     private int mFirstLineStartPosition;
 
+    // this crap is sorted, touch with care
     private static final int[] ATTRS = {
-        android.R.attr.orientation, android.R.attr.gravity,
-        android.R.attr.maxItemsPerRow, android.R.attr.spacing, android.R.attr.lineSpacingExtra,
-        android.R.attr.maxLines, android.R.attr.ellipsize,
+        android.R.attr.ellipsize,
+        android.R.attr.gravity,
+        android.R.attr.orientation,
+        android.R.attr.spacing,
+        android.R.attr.maxItemsPerRow,
+        android.R.attr.maxLines,
+        android.R.attr.lineSpacingExtra,
     };
     public FlowLayoutManager(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         this(context.obtainStyledAttributes(attrs, ATTRS, defStyleAttr, defStyleRes));
     }
     private FlowLayoutManager(TypedArray ta) {
         this(
-            ta.getInt(0, VERTICAL), ta.getInt(1, Gravity.START),
-            ta.getInt(2, Integer.MAX_VALUE), ta.getDimensionPixelOffset(3, 0), ta.getDimensionPixelOffset(4, 0));
-        maxLines(ta.getInt(5, Integer.MAX_VALUE), ta.getInt(6, 0) == 3 /*ellipsize="end"*/, false);
+            ta.getInt(2, VERTICAL), ta.getInt(1, Gravity.START),
+            ta.getInt(4, Integer.MAX_VALUE), ta.getDimensionPixelOffset(3, 0), ta.getDimensionPixelOffset(6, 0));
+        maxLines(ta.getInt(5, Integer.MAX_VALUE), ta.getInt(0, 0) == 3 /*ellipsize="end"*/, false);
         ta.recycle();
     }
 
