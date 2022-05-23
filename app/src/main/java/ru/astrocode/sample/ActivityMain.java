@@ -22,8 +22,8 @@ public class ActivityMain extends AppCompatActivity implements SeekBar.OnSeekBar
 
     SeekBar mMaxLineBar;
     FlowLayoutManager lm =
-        new FlowLayoutManager(FlowLayoutManager.VERTICAL, Gravity.CENTER)
-            .lookBehind(Integer.MAX_VALUE);
+        new FlowLayoutManager(RecyclerView.VERTICAL, Gravity.CENTER)
+            .lookBack(FlowLayoutManager.LookBack.EXACT);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
