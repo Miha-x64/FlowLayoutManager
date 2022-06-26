@@ -285,7 +285,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         return mEllipsisCount;
     }
 
-    public FlowLayoutManager spacingBetweenItems(int spacingBetweenItems) {
+    public FlowLayoutManager spacingBetweenItems(@Px int spacingBetweenItems) {
         if (spacingBetweenItems < 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         assertNotInLayoutOrScroll(null);
         mSpacingBetweenItems = spacingBetweenItems;
@@ -296,7 +296,7 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         return mSpacingBetweenItems;
     }
 
-    public FlowLayoutManager spacingBetweenLines(int spacingBetweenLines) {
+    public FlowLayoutManager spacingBetweenLines(@Px int spacingBetweenLines) {
         if (spacingBetweenLines < 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
         assertNotInLayoutOrScroll(null);
         mSpacingBetweenLines = spacingBetweenLines;
@@ -305,6 +305,16 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     }
     public int spacingBetweenLines() {
         return mSpacingBetweenLines;
+    }
+
+    public FlowLayoutManager spacing(@Px int betweenItems, @Px int betweenLines) {
+        if (betweenItems < 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
+        if (betweenLines < 0) throw new IllegalArgumentException(ERROR_BAD_ARGUMENT);
+        assertNotInLayoutOrScroll(null);
+        mSpacingBetweenItems = betweenItems;
+        mSpacingBetweenLines = betweenLines;
+        requestLayout();
+        return this;
     }
 
     /**
