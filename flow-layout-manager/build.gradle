@@ -4,7 +4,7 @@ apply plugin: 'com.android.library'
 android {
     compileSdkVersion 32
     defaultConfig {
-        minSdkVersion 14
+        minSdkVersion 18 // was 14+ but systrace requires 18
         targetSdkVersion 32
         versionCode 1
         versionName "1.0"
