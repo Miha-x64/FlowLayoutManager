@@ -479,9 +479,11 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
         int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
         int max = line.biggest();
         int childCount = getChildCount();
+        float fillMultiplier = mLayoutManagerHelper.shouldFillLine()
+            ? fillMultiplier(childCount - line.mItemsCount, childCount) : 1f;
         for (int i = line.mItemsCount; i > 0; i--) {
             currentStart += mSpacingBetweenItems + mLayoutManagerHelper
-                .layoutItem(max, line.mStartValueOfTheHighestItem, currentStart, childCount - i);
+                .layoutItem(max, line.mStartValueOfTheHighestItem, currentStart, childCount - i, fillMultiplier);
         }
     }
     private void layoutItemsToStart(int itemsSize, Line line) {
@@ -490,10 +492,24 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
     private void layoutItemsToStart(int itemsSize, Line line, int viewOffset) {
         int currentStart = mLayoutManagerHelper.getStartPositionOfFirstItem(itemsSize);
         int max = line.biggest();
+        float fillMultiplier = mLayoutManagerHelper.shouldFillLine()
+            ? fillMultiplier(viewOffset, viewOffset + line.mItemsCount) : 1f;
         for (int i = 0; i < line.mItemsCount; i++) {
             currentStart += mSpacingBetweenItems + mLayoutManagerHelper
-                .layoutItem(max, line.mStartValueOfTheHighestItem, currentStart, viewOffset + i);
+                .layoutItem(max, line.mStartValueOfTheHighestItem, currentStart, viewOffset + i, fillMultiplier);
         }
+    }
+    private float fillMultiplier(int startIndex, int endIndex) {
+        int sizeSum = 0;
+        int spaceSum = -mSpacingBetweenItems;
+        while (startIndex != endIndex) {
+            View child = getChildAt(startIndex++);
+            int size = mLayoutManagerHelper.getMeasurementInOther(child);
+            sizeSum += size;
+            spaceSum += mSpacingBetweenItems + mLayoutManagerHelper.getDecoratedMeasurementInOther(child) - size;
+        }
+        int avail = mLayoutManagerHelper.getLineSize() - spaceSum;
+        return (float) avail / sizeSum;
     }
 
     /**
@@ -810,12 +826,14 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
 
         abstract int getDecoratedMeasurement(View view);
         abstract int getDecoratedMeasurementInOther(View view);
+        abstract int getMeasurementInOther(View view);
 
         abstract int getSizeInLine(View view);
 
         abstract int getStartPositionOfFirstItem(int itemsSize);
 
-        abstract int layoutItem(int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt);
+        abstract boolean shouldFillLine();
+        abstract int layoutItem(int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt, float fillMultiplier);
 
         abstract void offsetChildren(int amount);
 
@@ -867,6 +885,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredWidth(view) + params.leftMargin + params.rightMargin;
             }
+            @Override int getMeasurementInOther(View view) {
+                return view.getMeasuredWidth();
+            }
 
             @Override int getSizeInLine(View view) {
                 return view.getLayoutParams().width;
@@ -884,9 +905,16 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 }
             }
 
+            @Override boolean shouldFillLine() {
+                return (mGravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.FILL_HORIZONTAL;
+            }
             @Override int layoutItem(
-                int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt) {
+                int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt, float fillMultiplier) {
                 View view = mLayoutManager.getChildAt(viewAt);
+                if (fillMultiplier != 1f) view.measure(
+                    MeasureSpec.makeMeasureSpec((int) (view.getMeasuredWidth() * fillMultiplier), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(view.getMeasuredHeight(), MeasureSpec.EXACTLY)
+                );
                 final int width = getDecoratedMeasurementInOther(view);
                 final int height = getDecoratedMeasurement(view);
 
@@ -957,6 +985,9 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) view.getLayoutParams();
                 return mLayoutManager.getDecoratedMeasuredHeight(view) + params.topMargin + params.bottomMargin;
             }
+            @Override int getMeasurementInOther(View view) {
+                return view.getMeasuredHeight();
+            }
 
             @Override int getSizeInLine(View view) {
                 return view.getLayoutParams().height;
@@ -974,9 +1005,16 @@ public class FlowLayoutManager extends RecyclerView.LayoutManager implements Rec
                 }
             }
 
+            @Override boolean shouldFillLine() {
+                return (mGravity & Gravity.VERTICAL_GRAVITY_MASK) == Gravity.FILL_VERTICAL;
+            }
             @Override int layoutItem(
-                int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt) {
+                int maxItemHeightOrWidth, int startValueOfTheHighestItem, int currentStart, int viewAt, float fillMultiplier) {
                 View view = mLayoutManager.getChildAt(viewAt);
+                if (fillMultiplier != 1f) view.measure(
+                    MeasureSpec.makeMeasureSpec(view.getMeasuredWidth(), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec((int) (view.getMeasuredHeight() * fillMultiplier), MeasureSpec.EXACTLY)
+                );
                 final int height = getDecoratedMeasurementInOther(view);
                 final int width = getDecoratedMeasurement(view);
 
